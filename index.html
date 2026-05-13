@@ -1894,6 +1894,7 @@ function saveDBDebounced(){
 let _fbSaving = false;
 async function saveFirebase(){
   if(!DB.settings.firebaseUrl||!DB.settings.firebaseKey) return;
+  if(_fbSaving) return; // prevent concurrent saves
   _fbSaving = true;
   try{
     const token = await getValidToken();
@@ -1901,9 +1902,16 @@ async function saveFirebase(){
     const url  = token ? base+'?auth='+encodeURIComponent(token) : base;
     const enc  = DB.settings.firebaseEncrypt||false;
     const payload = enc ? fbEncrypt(DB,DB.settings.firebaseKey) : DB;
-    await fetch(url,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const res = await fetch(url,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    if(!res.ok) throw new Error('HTTP '+res.status);
     setSyncUI('ok'); updateLastSync();
-  }catch(e){setSyncUI('err');}
+  }catch(e){
+    setSyncUI('err');
+    console.warn('saveFirebase:',e);
+  }finally{
+    // Delay reset so our own SSE echo is skipped, then allow external updates
+    setTimeout(()=>{ _fbSaving=false; }, 600);
+  }
 }
 
 async function loadFirebase(silent=false){
@@ -1968,26 +1976,33 @@ async function startSseSync(){
     _fbReconnectDelay = 3000; // reset backoff
 
     es.addEventListener('put', async e=>{
-      if(_fbSaving) return; // skip if we're mid-write
+      if(_fbSaving) return; // skip echo from our own save
       try{
         const msg = JSON.parse(e.data);
-        if(!msg||!msg.data) return;
+        if(!msg) return;
+
+        // Firebase SSE first event has path:"/" and data = full DB
+        // Subsequent events also have path:"/" with updated full DB
         let data = msg.data;
+        if(data === null || data === undefined) return; // path deleted or empty
+
         // Decrypt if needed
         if(data._enc){
           const dec = fbDecrypt(data, DB.settings.firebaseKey);
           if(!dec) return;
           data = dec;
         }
-        // Only update if data is different (avoid echo from own saves)
-        if(JSON.stringify(data.transactions?.length) !== JSON.stringify(DB.transactions?.length) ||
-           JSON.stringify(data.products?.length)     !== JSON.stringify(DB.products?.length)){
-          DB = data; saveLocal();
-          if(currentPage) renderPage(currentPage);
-          setSyncUI('ok'); updateLastSync();
-          showToast('🔄 Data diperbarui dari perangkat lain','inf',2000);
-        }
-      }catch(err){}
+
+        // Validate it looks like our DB (has settings and transactions)
+        if(!data.settings || !Array.isArray(data.transactions)) return;
+
+        // Always update — comparison by length was buggy (missed edits, price changes etc)
+        DB = data;
+        saveLocal();
+        if(currentPage) renderPage(currentPage);
+        setSyncUI('ok'); updateLastSync();
+        showToast('🔄 Data diperbarui dari perangkat lain','inf',2000);
+      }catch(err){ console.warn('SSE put error:',err); }
     });
 
     es.addEventListener('patch', async e=>{
@@ -2001,12 +2016,17 @@ async function startSseSync(){
       updateSyncLabel('● Real-time');
     };
 
-    es.onerror = ()=>{
+    es.onerror = async ()=>{
       setSyncUI('err');
       es.close(); _fbEventSource=null;
       updateSyncLabel('');
+      // Refresh token before reconnect
+      const apiKey = DB.settings.firebaseApiKey;
+      if(apiKey && _fbRefreshToken){
+        await fbRefreshIdToken(apiKey).catch(()=>{});
+      }
       // Reconnect with exponential backoff (max 30s)
-      _fbReconnectDelay = Math.min(_fbReconnectDelay * 1.5, 30000);
+      _fbReconnectDelay = Math.min((_fbReconnectDelay||3000) * 1.5, 30000);
       _fbReconnectTimer = setTimeout(startSseSync, _fbReconnectDelay);
     };
 
