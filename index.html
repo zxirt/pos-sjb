@@ -1929,6 +1929,22 @@ async function loadFirebase(silent=false){
         if(!dec){ setSyncUI('err'); showToast('❌ Dekripsi gagal — periksa Sync Key','er',4000); return; }
         data=dec;
       }
+      // Migration guards — prevent .map() crash on undefined arrays
+      if(!Array.isArray(data.transactions)) data.transactions=[];
+      if(!Array.isArray(data.purchases))    data.purchases=[];
+      if(!Array.isArray(data.debts))        data.debts=[];
+      if(!Array.isArray(data.stokHist))     data.stokHist=[];
+      if(!Array.isArray(data.products))     data.products=[];
+      if(!Array.isArray(data.customers))    data.customers=[];
+      if(!Array.isArray(data.suppliers))    data.suppliers=[];
+      if(!Array.isArray(data.users))        data.users=[];
+      if(!Array.isArray(data.categories))   data.categories=[];
+      if(!Array.isArray(data.units))        data.units=[];
+      if(!Array.isArray(data.loginLog))     data.loginLog=[];
+      if(!data.settings)                    data.settings={};
+      if(!data.settings.kasirAccess)        data.settings.kasirAccess={};
+      if(!data.settings.nota)               data.settings.nota={};
+      if(!data.settings.printer)            data.settings.printer={};
       DB=data; saveLocal();
     }
     setSyncUI('ok'); updateLastSync();
@@ -1995,6 +2011,24 @@ async function startSseSync(){
 
         // Validate it looks like our DB (has settings and transactions)
         if(!data.settings || !Array.isArray(data.transactions)) return;
+
+        // Run migration guards — same as loadLocal()
+        // Prevents .map() crash if data from Firebase is missing arrays
+        if(!Array.isArray(data.transactions))  data.transactions=[];
+        if(!Array.isArray(data.purchases))     data.purchases=[];
+        if(!Array.isArray(data.debts))         data.debts=[];
+        if(!Array.isArray(data.stokHist))      data.stokHist=[];
+        if(!Array.isArray(data.products))      data.products=[];
+        if(!Array.isArray(data.customers))     data.customers=[];
+        if(!Array.isArray(data.suppliers))     data.suppliers=[];
+        if(!Array.isArray(data.users))         data.users=[];
+        if(!Array.isArray(data.categories))    data.categories=[];
+        if(!Array.isArray(data.units))         data.units=[];
+        if(!Array.isArray(data.loginLog))      data.loginLog=[];
+        if(!data.settings)                     data.settings={};
+        if(!data.settings.kasirAccess)         data.settings.kasirAccess={};
+        if(!data.settings.nota)                data.settings.nota={};
+        if(!data.settings.printer)             data.settings.printer={};
 
         // Always update — comparison by length was buggy (missed edits, price changes etc)
         DB = data;
