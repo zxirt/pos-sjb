@@ -568,6 +568,10 @@ textarea.fc{resize:vertical;min-height:60px}
     <div class="fg"><label class="fl">Username</label><input type="text" class="fc" id="loginUser" placeholder="Username" onkeydown="if(event.key==='Enter')doLogin()"></div>
     <div class="fg"><label class="fl">Password</label><input type="password" class="fc" id="loginPass" placeholder="Password" onkeydown="if(event.key==='Enter')doLogin()"></div>
     <div id="loginErr" class="alert al-er hidden">Username atau password salah</div>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:12px;cursor:pointer;font-size:13px;color:#64748b">
+      <input type="checkbox" id="loginRemember" checked style="width:16px;height:16px;accent-color:#f97316">
+      Ingat perangkat ini
+    </label>
     <button class="btn btn-pr btn-blk" onclick="doLogin()">Masuk</button>
   </div>
 </div>
@@ -1346,6 +1350,7 @@ textarea.fc{resize:vertical;min-height:60px}
     <div class="grid2" style="gap:15px">
       <div>
         <div class="fg"><label class="fl">Nama Produk *</label><input type="text" class="fc" id="prodNama" placeholder="Nama produk"></div>
+        <div class="fg"><label class="fl">Merk / Brand</label><input type="text" class="fc" id="prodMerk" placeholder="mis: Holcim, Tiga Roda, Dulux (opsional)"></div>
         <div class="fr">
           <div class="fg"><label class="fl">Kategori *</label><select class="fc" id="prodKat"></select></div>
           <div class="fg"><label class="fl">Supplier</label><select class="fc" id="prodSup"></select></div>
@@ -2159,7 +2164,8 @@ function doLogin(){
   if(!found){document.getElementById('loginErr').classList.remove('hidden');return;}
   session=found;
   // Save to localStorage with timestamp (survives app switches on mobile)
-  const sesData={...found, _savedAt: Date.now()};
+  const remember = document.getElementById('loginRemember')?.checked !== false;
+  const sesData={...found, _savedAt: Date.now(), _remember: remember};
   localStorage.setItem('pos_ses', JSON.stringify(sesData));
   // Record login event
   recordLoginEvent('login', found);
@@ -2371,7 +2377,7 @@ function setPCat(cat,el){ posCat=cat; document.querySelectorAll('#posCats .cb').
 function renderPosGrid(){
   const q=(document.getElementById('posQ')||{}).value||'',ql=q.toLowerCase();
   let prods=DB.products.filter(p=>{
-    const mq=!q||p.nama.toLowerCase().includes(ql)||p.units.some(u=>u.barcode&&u.barcode.toLowerCase().includes(ql));
+    const mq=!q||p.nama.toLowerCase().includes(ql)||(p.merk||'').toLowerCase().includes(ql)||p.units.some(u=>u.barcode&&u.barcode.toLowerCase().includes(ql));
     if(posCat==='__pin__') return mq&&p.pinned;
     return mq&&(!posCat||p.kat===posCat);
   });
@@ -2395,6 +2401,7 @@ function renderPosGrid(){
       '<span class="pcat">'+p.kat+'</span>'+
       (multi?'<span class="multi-badge">'+p.units.length+' satuan</span>':'')+
       '<div class="pn">'+p.nama+'</div>'+
+      (p.merk?'<div style="font-size:10px;color:#f97316;font-weight:600;margin-bottom:2px">'+p.merk+'</div>':'')+
       '<div class="pp">'+rp(u.hj)+'<span> /'+u.unit+'</span></div>'+
       '<div class="ps '+stokCls+'">'+stokTxt+'</div>'+
       '</div>';
@@ -3120,7 +3127,7 @@ function renderProdPage(){
 function renderProdTbl(){
   const q=(document.getElementById('pQ')||{}).value||'',cat=(document.getElementById('pCat')||{}).value||'',sup=(document.getElementById('pSup')||{}).value||'';
   const prods=DB.products.filter(p=>{
-    const mq=!q||p.nama.toLowerCase().includes(q.toLowerCase())||p.units.some(u=>u.barcode&&u.barcode.toLowerCase().includes(q.toLowerCase()));
+    const mq=!q||p.nama.toLowerCase().includes(q.toLowerCase())||(p.merk||'').toLowerCase().includes(q.toLowerCase())||p.units.some(u=>u.barcode&&u.barcode.toLowerCase().includes(q.toLowerCase()));
     return mq&&(!cat||p.kat===cat)&&(!sup||p.supplierId===sup);
   });
   const tb=document.getElementById('prodTbl');if(!tb)return;
@@ -3129,7 +3136,7 @@ function renderProdTbl(){
     const st=p.stok<0?'pu':p.stok<=0?'er':p.stok<=p.minStok?'wa':'ok';
     const unitStr=p.units.map(u=>`<div class="unit-tag ${u.isDefault?'def':''}" style="font-size:10px;margin:1px">${u.unit}: ${rp(u.hj)}${u.barcode?` <span style="color:#94a3b8">[${u.barcode}]</span>`:''}</div>`).join('');
     return `<tr>
-      <td><div class="fw7">${p.nama}</div>${p.desc?`<div style="font-size:10px;color:#94a3b8">${p.desc}</div>`:''}</td>
+      <td><div class="fw7">${p.nama}</div>${p.merk?`<div style="font-size:10px;color:#f97316;font-weight:600">${p.merk}</div>`:''}${p.desc?`<div style="font-size:10px;color:#94a3b8">${p.desc}</div>`:''}</td>
       <td>${p.kat}</td><td>${getSupName(p.supplierId)}</td>
       <td>${unitStr}</td>
       <td><span class="badge b-${st}">${p.stok}</span></td>
@@ -3310,6 +3317,7 @@ function openProdModal(pid){
   if(pid){
     const p=DB.products.find(x=>x.id===pid);if(!p)return;
     document.getElementById('prodNama').value=p.nama;
+    document.getElementById('prodMerk').value=p.merk||'';
     document.getElementById('prodKat').value=p.kat;
     document.getElementById('prodSup').value=p.supplierId||'';
     document.getElementById('prodStok').value=p.stok||0;
@@ -3317,7 +3325,7 @@ function openProdModal(pid){
     document.getElementById('prodDesc').value=p.desc||'';
     (p.units||[]).forEach(u=>addUnitRow(u));
   } else {
-    ['prodNama','prodDesc'].forEach(id=>document.getElementById(id).value='');
+    ['prodNama','prodDesc','prodMerk'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('prodStok').value=0;
     document.getElementById('prodMin').value=DB.settings.minStok||5;
     addUnitRow({unit:'Pcs',hj:0,hb:0,barcode:'',isDefault:true});
@@ -3335,7 +3343,7 @@ function saveProduk(){
   const defU=units.find(u=>u.isDefault)||units[0];
   const margin=defU.hj>0?Math.round((defU.hj-defU.hb)/defU.hj*100):0;
   const pid=document.getElementById('prodId').value;
-  const data={nama,kat,supplierId:document.getElementById('prodSup').value,
+  const data={nama,kat,merk:document.getElementById('prodMerk').value.trim(),supplierId:document.getElementById('prodSup').value,
     stok:parseInt(document.getElementById('prodStok').value)||0,
     minStok:parseInt(document.getElementById('prodMin').value)||5,
     desc:document.getElementById('prodDesc').value,
@@ -3366,10 +3374,10 @@ function delProd(pid){
 function downloadTemplate(){
   const doDownload=()=>{
     const data=[
-      ['Nama Produk','Kategori','Satuan1','HJ1','HB1','Barcode1','Satuan2','HJ2','HB2','Barcode2','Stok','Min Stok','Supplier','Deskripsi'],
-      ['Semen Tiga Roda 50kg','Semen & Pasir','Sak',75000,68000,'SEM001','Kg',1800,1500,'SEM001-KG',50,10,'',''],
-      ['Cat Tembok 5kg','Cat & Pelapis','Kaleng',115000,95000,'CAT001','','','','',30,5,'',''],
-      ['Pipa PVC AW 4" 4m','Pipa & Sanitasi','Batang',100000,82000,'PIP001','','','','',76,10,'',''],
+      ['Nama Produk','Merk','Kategori','Satuan1','HJ1','HB1','Barcode1','Satuan2','HJ2','HB2','Barcode2','Stok','Min Stok','Supplier','Deskripsi'],
+      ['Semen Tiga Roda 50kg','Tiga Roda','Semen & Pasir','Sak',75000,68000,'SEM001','Kg',1800,1500,'SEM001-KG',50,10,'',''],
+      ['Cat Tembok 5kg','Dulux','Cat & Pelapis','Kaleng',115000,95000,'CAT001','','','','',30,5,'',''],
+      ['Pipa PVC AW 4" 4m','Wavin','Pipa & Sanitasi','Batang',100000,82000,'PIP001','','','','',76,10,'',''],
     ];
     const ws=XLSX.utils.aoa_to_sheet(data);
     // Set column widths
@@ -3427,20 +3435,38 @@ function importExcel(e){
       let added=0,updated=0;
       rows.slice(1).forEach(row=>{
         if(!row[0])return;
-        const nama=String(row[0]).trim(),kat=String(row[1]).trim()||'Lain-lain';
-        if(!DB.categories.includes(kat))DB.categories.push(kat);
+        // Support both old format (no merk) and new format (with merk in col B)
+        // Detect: if col[1] looks like a category (known category) or merk (text not a number)
+        // New template: Nama, Merk, Kategori, Satuan1, HJ1, HB1, Barcode1, ...
+        // Old template: Nama, Kategori, Satuan1, HJ1, HB1, Barcode1, ...
+        const hasHeader = rows[0] && String(rows[0][1]||'').toLowerCase().includes('merk');
+        const nama = String(row[0]).trim();
+        let merk='', kat='', baseOffset=2;
+        if(hasHeader){
+          // New format: col 0=Nama, 1=Merk, 2=Kategori, 3+=Satuan1...
+          merk = String(row[1]||'').trim();
+          kat  = String(row[2]||'').trim()||'Lain-lain';
+          baseOffset = 3;
+        } else {
+          // Old format: col 0=Nama, 1=Kategori, 2+=Satuan1...
+          kat  = String(row[1]||'').trim()||'Lain-lain';
+          baseOffset = 2;
+        }
+        if(!DB.categories.includes(kat)) DB.categories.push(kat);
         const units=[];
         for(let i=0;i<3;i++){
-          const base=2+i*4;
+          const base=baseOffset+i*4;
           const u=String(row[base]||'').trim(),hj=parseInt(row[base+1])||0,hb=parseInt(row[base+2])||0,bc=String(row[base+3]||'').trim();
           if(u){if(!DB.units.includes(u))DB.units.push(u);units.push({unit:u,hj,hb,barcode:bc,isDefault:i===0});}
         }
-        if(!units.length)units.push({unit:'Pcs',hj:0,hb:0,barcode:'',isDefault:true});
-        const stok=parseInt(row[10+Math.max(0,(units.length-1)*4-((units.length-1)*4))+2])||parseInt(row[10])||0;
-        const minS=parseInt(row[11])||5;
+        if(!units.length) units.push({unit:'Pcs',hj:0,hb:0,barcode:'',isDefault:true});
+        const stokCol = baseOffset + 12;
+        const minCol  = baseOffset + 13;
+        const stok=parseInt(row[stokCol])||parseInt(row[10])||0;
+        const minS=parseInt(row[minCol])||parseInt(row[11])||5;
         const ex=DB.products.find(p=>p.nama.toLowerCase()===nama.toLowerCase());
-        if(ex){Object.assign(ex,{nama,kat,units,stok,minStok:minS});updated++;}
-        else{DB.products.push({id:uid(),nama,kat,supplierId:'',stok,minStok:minS,desc:'',units,priceHist:[]});added++;}
+        if(ex){Object.assign(ex,{nama,merk,kat,units,stok,minStok:minS});updated++;}
+        else{DB.products.push({id:uid(),nama,merk,kat,supplierId:'',stok,minStok:minS,desc:'',units,priceHist:[]});added++;}
       });
       saveDB();alert(`Import selesai!\nBaru: ${added}\nUpdate: ${updated}`);renderProdPage();
     }catch(err){alert('Error: '+err.message);}
@@ -6241,18 +6267,18 @@ function _doExportExcel(){
     [toko+' — Data Produk & Stok','','','','','','',''],
     ['Dicetak: '+tgl,'','','','','','',''],
     [],
-    ['No','Nama Produk','Kategori','Stok','Min Stok','Status Stok',
+    ['No','Nama Produk','Merk','Kategori','Stok','Min Stok','Status Stok',
      'Satuan Default','Harga Jual','Harga Beli','Margin %','Supplier'],
   ];
   DB.products.forEach((p,i)=>{
     const u = getDefaultUnit(p);
     const margin = u.hb>0 ? ((u.hj-u.hb)/u.hb*100).toFixed(1)+'%' : '-';
     const stokStatus = p.stok<=0 ? 'HABIS' : p.stok<=(p.minStok||0) ? 'MENIPIS' : 'OK';
-    prodRows.push([i+1, p.nama, p.kat||'', p.stok, p.minStok||0,
+    prodRows.push([i+1, p.nama, p.merk||'', p.kat||'', p.stok, p.minStok||0,
       stokStatus, u.unit||'', u.hj||0, u.hb||0, margin, p.supplierNama||'']);
   });
   const ws3 = XLSX.utils.aoa_to_sheet(prodRows);
-  styleSheet(ws3, 4, [5,30,16,8,10,12,12,16,16,10,18], 11);
+  styleSheet(ws3, 4, [5,30,16,16,8,10,12,12,16,16,10,18], 12);
   ws3['!merges'] = [{s:{r:0,c:0},e:{r:0,c:10}},{s:{r:1,c:0},e:{r:1,c:10}}];
   XLSX.utils.book_append_sheet(wb, ws3, '📦 Produk & Stok');
 
@@ -6320,11 +6346,14 @@ function _doExportExcel(){
 
 loadLocal();
 (function restoreSession(){
-  const SESSION_TIMEOUT = 2 * 60 * 60 * 1000; // 2 jam
+  const TWO_HOURS   = 2  * 60 * 60 * 1000;
+  const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
   try{
     const raw = localStorage.getItem('pos_ses') || sessionStorage.getItem('pos_ses');
     if(!raw) return;
     const s = JSON.parse(raw);
+    // Timeout: 30 hari jika "Ingat perangkat", 2 jam jika tidak
+    const SESSION_TIMEOUT = s._remember ? THIRTY_DAYS : TWO_HOURS;
     // Cek apakah sesi masih valid (belum timeout)
     const savedAt = s._savedAt || 0;
     const isRecent = (Date.now() - savedAt) < SESSION_TIMEOUT;
