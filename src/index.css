@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-bg text-ink font-sans antialiased;
+  }
+  /* Angka uang rapi sejajar */
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+  /* Fokus keyboard yang terlihat */
+  :focus-visible {
+    outline: 3px solid theme("colors.accent.soft");
+    outline-offset: 1px;
+  }
+}
+
+@layer components {
+  /* Area sentuh besar untuk kasir cepat (min 44px) */
+  .touch-target {
+    @apply min-h-[44px];
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
