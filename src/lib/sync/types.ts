@@ -20,48 +20,51 @@ import type {
   Purchase,
   PurchaseItem,
   Settings,
+  User,
 } from "@/db/types";
 
 // ============================================================================
 // Sync table registry — yang perlu di-sync
 // ============================================================================
 export const SYNC_TABLES = [
+  "settings",
+  "users",
   "categories",
   "units",
   "items",
   "item_units",
   "suppliers",
   "customers",
+  "purchases",
+  "purchase_items",
   "transactions",
   "transaction_items",
-  "stock_ledger",
   "receivables",
   "payables",
   "payments",
-  "purchases",
-  "purchase_items",
-  "settings",
+  "stock_ledger",
 ] as const;
 
 export type SyncTableName = (typeof SYNC_TABLES)[number];
 
 // Type map untuk table name → entity type
 export interface SyncTableMap {
+  settings: Settings;
+  users: User;
   categories: Category;
   units: Unit;
   items: Item;
   item_units: ItemUnit;
   suppliers: Supplier;
   customers: Customer;
+  purchases: Purchase;
+  purchase_items: PurchaseItem;
   transactions: Transaction;
   transaction_items: TransactionItem;
-  stock_ledger: StockLedger;
   receivables: Receivable;
   payables: Payable;
   payments: Payment;
-  purchases: Purchase;
-  purchase_items: PurchaseItem;
-  settings: Settings;
+  stock_ledger: StockLedger;
 }
 
 // ============================================================================

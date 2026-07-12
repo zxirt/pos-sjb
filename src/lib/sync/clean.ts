@@ -115,7 +115,7 @@ export function getRecordFields(
  * Server akan INSERT jika belum ada (by id), atau UPDATE jika sudah
  */
 export function buildUpsertWhere(
-  table: SyncTableName,
+  _table: SyncTableName,
   id: string
 ): Record<string, any> {
   return { id };

@@ -3,7 +3,8 @@
  * Subscription pattern: listeners get notified on state change
  */
 
-import type { SyncStatus, SyncTableName, SYNC_TABLES } from "./types";
+import type { SyncStatus, SyncTableName } from "./types";
+import { SYNC_TABLES } from "./types";
 import { countDirtyPerTable } from "./push";
 
 // ============================================================================
@@ -129,6 +130,8 @@ export function resetSyncState(): void {
   state.isSyncing = false;
   state.lastSyncAt = undefined;
   state.syncError = undefined;
-  state.dirtyCount = {};
+  state.dirtyCount = Object.fromEntries(
+    SYNC_TABLES.map((table: SyncTableName) => [table, 0])
+  ) as Record<SyncTableName, number>;
   notifyListeners();
 }

@@ -107,3 +107,79 @@ comment on column transactions.catatan is 'Catatan transaksi (Fase 3, via riwaya
 comment on column transactions.biaya is 'Array biaya tambahan [BiayaTambahan] — label + nominal free-text (ongkir, buruh, potong kayu).';
 comment on column receivables.customer_id is 'ID customer (NULLABLE = piutang "Umum") — Fase 4.';
 comment on column payables.purchase_id is 'ID purchase (NULLABLE = hutang manual). Fase 4/4c.';
+
+-- 10) RPC sync_push: UPSERT baris dari klien (server-set updated_at)
+create or replace function sync_push(p_store_id uuid, p_rows jsonb)
+returns jsonb language plpgsql security definer
+as $$
+declare
+  v_row jsonb;
+  v_table text;
+  v_id uuid;
+  v_deleted int;
+  v_upserted int := 0;
+  v_errors jsonb := '[]'::jsonb;
+begin
+  for v_row in select jsonb_array_elements(p_rows)
+  loop
+    begin
+      v_table := v_row->>'table';
+      v_id := (v_row->>'id')::uuid;
+      v_deleted := (v_row->>'deleted')::int;
+
+      execute format(
+        'insert into %I (id, store_id, updated_at, deleted) values ($1, $2, now(), $3)
+         on conflict (id) do update set updated_at = now(), deleted = excluded.deleted',
+        v_table
+      ) using v_id, p_store_id, v_deleted;
+      v_upserted := v_upserted + 1;
+    exception when others then
+      v_errors := v_errors || jsonb_build_object('id', v_id, 'error', SQLERRM);
+    end;
+  end loop;
+
+  return jsonb_build_object(
+    'success', jsonb_array_length(v_errors) = 0,
+    'upserted', v_upserted,
+    'deleted', 0,
+    'errors', v_errors
+  );
+end;
+$$;
+
+-- 11) RPC sync_pull: ambil baris baru/berubah sejak cursor
+create or replace function sync_pull(p_store_id uuid, p_tables jsonb)
+returns jsonb language plpgsql security definer
+as $$
+declare
+  v_table jsonb;
+  v_name text;
+  v_cursor text;
+  v_rows jsonb := '[]'::jsonb;
+  v_batch jsonb;
+begin
+  for v_table in select jsonb_array_elements(p_tables)
+  loop
+    v_name := v_table->>'table';
+    v_cursor := v_table->>'cursor';
+
+    if v_cursor is null or v_cursor = '' then
+      execute format(
+        'select coalesce(jsonb_agg(jsonb_build_object(''table'', %L, ''id'', id, ''data'', to_jsonb(t.*) - ''dirty'' - ''sync_state'', ''deleted'', deleted, ''updated_at'', updated_at)), ''[]''::jsonb)
+         from %I t where store_id = $1 and deleted = 0',
+        v_name, v_name
+      ) into v_batch using p_store_id;
+    else
+      execute format(
+        'select coalesce(jsonb_agg(jsonb_build_object(''table'', %L, ''id'', id, ''data'', to_jsonb(t.*) - ''dirty'' - ''sync_state'', ''deleted'', deleted, ''updated_at'', updated_at)), ''[]''::jsonb)
+         from %I t where store_id = $1 and updated_at > $2::timestamptz and deleted = 0',
+        v_name, v_name
+      ) into v_batch using p_store_id, v_cursor;
+    end if;
+
+    v_rows := v_rows || v_batch;
+  end loop;
+
+  return jsonb_build_object('rows', v_rows, 'success', true);
+end;
+$$;

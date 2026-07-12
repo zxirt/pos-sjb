@@ -1,15 +1,4 @@
-/**
- * Fase 5: Sync Engine Orchestrator
- * Koordinasi push, pull, merge, recompute untuk offline-first sync
- *
- * Strategy:
- * - Push dirty rows ke server (LWW: server updated_at wins)
- * - Pull new/updated rows dari server (incremental by cursor)
- * - Merge dengan LWW (server wins), recompute stock ledger
- * - Repeat: otomatis saat online, atau manual syncNow()
- */
-
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient, type RealtimeChannel } from "@supabase/supabase-js";
 import type { SyncEngineConfig, SyncStatus } from "./types";
 import { collectAllDirty, markSynced, markSyncError, markSyncing } from "./push";
 import { push as pushRows } from "./push";
@@ -25,66 +14,63 @@ import {
   markSyncErrorState,
   getSyncStatus,
   updateDirtyCount,
+  setIsOnline,
 } from "./state";
+import { subscribeRemoteChanges } from "./realtime";
 
-/**
- * Sync engine instance (singleton per store)
- */
 export class SyncEngine {
   private config: SyncEngineConfig;
   private supabase: SupabaseClient;
-  private pushInterval?: NodeJS.Timeout;
-  private pullInterval?: NodeJS.Timeout;
-  private realtimeChannel?: any;
+  private realtimeChannel?: RealtimeChannel;
   private syncing = false;
+  private rerun = false;
+  private notifyTimer?: ReturnType<typeof setTimeout>;
+  private debouncedPullTimer?: ReturnType<typeof setTimeout>;
+  private _started = false;
 
   constructor(config: SyncEngineConfig) {
     this.config = config;
     this.supabase = createClient(config.supabaseUrl, config.supabaseKey);
   }
 
-  /**
-   * Start sync engine: begin push/pull cycles
-   */
-  async start(): Promise<void> {
-    console.log("[SyncEngine] Starting...");
+  get started(): boolean {
+    return this._started;
+  }
 
-    // Update dirty count on start
+  async start(): Promise<void> {
+    if (this._started) return;
+    console.log("[SyncEngine] Starting...");
+    this._started = true;
+
+    setIsOnline(navigator.onLine);
     await updateDirtyCount();
 
-    // Setup auto-push interval jika enabled
-    if (this.config.pushIntervalMs && this.config.pushIntervalMs > 0) {
-      this.pushInterval = setInterval(
-        () => this.syncNow(),
-        this.config.pushIntervalMs
-      );
+    window.addEventListener("online", this._onOnline);
+    window.addEventListener("offline", this._onOffline);
+
+    if (navigator.onLine) {
+      await this.syncNow();
     }
 
-    // Setup auto-pull interval jika enabled
-    if (this.config.pullIntervalMs && this.config.pullIntervalMs > 0) {
-      this.pullInterval = setInterval(
-        () => this.syncNow(),
-        this.config.pullIntervalMs
-      );
-    }
-
+    this._subscribeRealtime();
     console.log("[SyncEngine] Started");
   }
 
-  /**
-   * Stop sync engine
-   */
   async stop(): Promise<void> {
+    if (!this._started) return;
     console.log("[SyncEngine] Stopping...");
+    this._started = false;
 
-    if (this.pushInterval) {
-      clearInterval(this.pushInterval);
-      this.pushInterval = undefined;
+    window.removeEventListener("online", this._onOnline);
+    window.removeEventListener("offline", this._onOffline);
+
+    if (this.notifyTimer) {
+      clearTimeout(this.notifyTimer);
+      this.notifyTimer = undefined;
     }
-
-    if (this.pullInterval) {
-      clearInterval(this.pullInterval);
-      this.pullInterval = undefined;
+    if (this.debouncedPullTimer) {
+      clearTimeout(this.debouncedPullTimer);
+      this.debouncedPullTimer = undefined;
     }
 
     if (this.realtimeChannel) {
@@ -95,20 +81,50 @@ export class SyncEngine {
     console.log("[SyncEngine] Stopped");
   }
 
-  /**
-   * Manual sync: push + pull + merge in one go
-   */
-  async syncNow(): Promise<SyncStatus | null> {
-    // Check online status
-    const online = navigator.onLine;
+  private _onOnline = async () => {
+    setIsOnline(true);
+    await this.syncNow();
+  };
 
-    if (!online) {
-      console.log("[SyncEngine] Offline, skipping sync");
+  private _onOffline = () => {
+    setIsOnline(false);
+  };
+
+  private _subscribeRealtime(): void {
+    this.realtimeChannel = subscribeRemoteChanges(
+      this.supabase,
+      this.config.storeId,
+      () => {
+        if (this.debouncedPullTimer) clearTimeout(this.debouncedPullTimer);
+        this.debouncedPullTimer = setTimeout(() => {
+          this.syncNow();
+        }, 500);
+      },
+    );
+  }
+
+  /**
+   * Panggil dari komponen setelah perubahan data lokal
+   * (mis. dari helpers.ts setelah db.transaction).
+   * Debounce 500ms agar batch perubahan dikumpulkan dulu.
+   */
+  notifyLocalChange(): void {
+    if (!this._started) return;
+    if (this.notifyTimer) clearTimeout(this.notifyTimer);
+    this.notifyTimer = setTimeout(() => {
+      void updateDirtyCount();
+      if (navigator.onLine) {
+        void this.syncNow();
+      }
+    }, 500);
+  }
+
+  async syncNow(): Promise<SyncStatus | null> {
+    if (this.syncing) {
+      this.rerun = true;
       return null;
     }
-
-    if (this.syncing) {
-      console.log("[SyncEngine] Already syncing, skip");
+    if (!navigator.onLine) {
       return null;
     }
 
@@ -118,20 +134,12 @@ export class SyncEngine {
     try {
       this.syncing = true;
 
-      // 1) Push dirty rows
-      console.log("[SyncEngine] Pushing dirty rows...");
       await this.pushDirty();
-
-      // 2) Pull new/updated rows
-      console.log("[SyncEngine] Pulling new rows...");
       await this.pullNew();
 
-      // Success
       markSyncEnd();
       const status = getSyncStatus();
       this.config.onSyncEnd?.(status);
-
-      console.log("[SyncEngine] Sync complete");
       return status;
     } catch (error) {
       console.error("[SyncEngine] Sync error:", error);
@@ -140,59 +148,42 @@ export class SyncEngine {
       return null;
     } finally {
       this.syncing = false;
+      if (this.rerun) {
+        this.rerun = false;
+        void this.syncNow();
+      }
     }
   }
 
-  /**
-   * Push dirty rows ke server
-   */
   private async pushDirty(): Promise<void> {
     const pushRequest = await collectAllDirty(this.config.storeId);
 
     if (pushRequest.rows.length === 0) {
-      console.log("[SyncEngine] No dirty rows to push");
       return;
     }
 
-    console.log(`[SyncEngine] Pushing ${pushRequest.rows.length} rows...`);
-
-    // Mark as syncing (optimistic)
     const rowsToSync = pushRequest.rows.map((row) => ({
       table: row.table,
       id: row.id,
     }));
     await markSyncing(rowsToSync);
 
-    // Send to server
     const response = await pushRows(this.supabase, pushRequest);
 
     if (response.success) {
-      // Mark as synced
       await markSynced(rowsToSync);
-      console.log(
-        `[SyncEngine] Push OK: +${response.upserted} rows, -${response.deleted} deleted`
-      );
     } else {
-      // Mark as error (keep dirty)
       await markSyncError(
         rowsToSync,
-        response.errors?.[0]?.error || "Push failed"
+        response.errors?.[0]?.error || "Push failed",
       );
       throw new Error("Push failed: " + response.errors?.[0]?.error);
     }
   }
 
-  /**
-   * Pull new/updated rows dari server
-   */
   private async pullNew(): Promise<void> {
-    // Load cursor
     let cursor = loadCursor(this.config.storeId);
-
-    // Build pull request (incremental atau full)
     const pullRequest = buildPullRequest(this.config.storeId, cursor, false);
-
-    // Fetch from server
     const response = await pullRows(this.supabase, pullRequest);
 
     if (!response.success) {
@@ -200,50 +191,29 @@ export class SyncEngine {
     }
 
     if (isPullEmpty(response)) {
-      console.log("[SyncEngine] No new rows");
       return;
     }
 
-    console.log(`[SyncEngine] Pulled ${response.rows.length} rows`);
+    await applyPullRows(response.rows);
 
-    // Merge & apply
-    const mergeResult = await applyPullRows(response.rows);
-    console.log(
-      `[SyncEngine] Merge: +${mergeResult.inserted} ~${mergeResult.updated} -${mergeResult.deleted}`
-    );
-
-    if (mergeResult.errors.length > 0) {
-      console.warn(
-        `[SyncEngine] Merge errors: ${mergeResult.errors.length}`,
-        mergeResult.errors
-      );
-    }
-
-    // Recompute stock for affected items
     const affectedItems = collectAffectedItems(response.rows);
     if (affectedItems.size > 0) {
-      console.log(
-        `[SyncEngine] Recomputing stock for ${affectedItems.size} items...`
-      );
       await recomputeStockBatch(Array.from(affectedItems));
     }
 
-    // Update cursor
     cursor = updateCursor(cursor, response.rows);
     saveCursor(this.config.storeId, cursor);
   }
 }
 
-/**
- * Singleton instance
- */
 let syncEngine: SyncEngine | null = null;
 
-/**
- * Create atau get sync engine
- */
+export function getSyncEngine(): SyncEngine | null {
+  return syncEngine;
+}
+
 export function createOrGetSyncEngine(
-  config: SyncEngineConfig
+  config: SyncEngineConfig,
 ): SyncEngine {
   if (!syncEngine) {
     syncEngine = new SyncEngine(config);
@@ -251,14 +221,13 @@ export function createOrGetSyncEngine(
   return syncEngine;
 }
 
-/**
- * Export untuk app initialization
- */
 export async function initSyncEngine(
-  config: SyncEngineConfig
+  config: SyncEngineConfig,
 ): Promise<SyncEngine> {
   const engine = createOrGetSyncEngine(config);
-  await engine.start();
+  if (!engine.started) {
+    await engine.start();
+  }
   return engine;
 }
 

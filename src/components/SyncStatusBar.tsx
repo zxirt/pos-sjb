@@ -1,31 +1,41 @@
-import { useLiveQuery } from "dexie-react-hooks";
-import { Cloud, CloudOff, RefreshCw, Check } from "lucide-react";
-import { db } from "@/db/db";
-import { SYNC_TABLES } from "@/db/types";
+import { useEffect, useState } from "react";
+import { Cloud, CloudOff, RefreshCw, Check, Loader2 } from "lucide-react";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { cn } from "@/lib/cn";
+import { getSyncEngine } from "@/lib/sync";
+import { getSyncStatus, subscribeSyncStatus } from "@/lib/sync/state";
+import type { SyncStatus } from "@/lib/sync/types";
 
-/**
- * Bar status sinkronisasi.
- * Fase 0: menampilkan online/offline + jumlah baris belum-tersinkron (dirty).
- * Tombol "Sinkron sekarang" sebagai pemicu manual cadangan — di Fase 5
- * disambungkan ke sync engine (sync utama berjalan otomatis & terus-menerus).
- */
 export function SyncStatusBar() {
   const online = useOnlineStatus();
+  const [status, setStatus] = useState<SyncStatus>(() => getSyncStatus());
+  const [syncing, setSyncing] = useState(false);
 
-  // Hitung total baris dirty di semua tabel sync.
-  const unsynced = useLiveQuery(async () => {
-    let total = 0;
-    for (const t of SYNC_TABLES) {
-      const table = (db as unknown as Record<string, { where: (i: string) => { equals: (v: number) => { count: () => Promise<number> } } }>)[t];
-      if (table) total += await table.where("dirty").equals(1).count();
-    }
-    return total;
+  useEffect(() => {
+    const unsub = subscribeSyncStatus((s) => {
+      setStatus({
+        isOnline: s.isOnline,
+        isSyncing: s.isSyncing,
+        lastSyncAt: s.lastSyncAt,
+        syncError: s.syncError,
+        dirtyCount: s.dirtyCount,
+        totalDirty: Object.values(s.dirtyCount).reduce((a, b) => a + b, 0),
+      });
+    });
+    return unsub;
   }, []);
 
-  const count = unsynced ?? 0;
+  const handleSync = async () => {
+    const engine = getSyncEngine();
+    if (!engine || syncing) return;
+    setSyncing(true);
+    await engine.syncNow();
+    setSyncing(false);
+  };
+
+  const count = status.totalDirty;
   const allSynced = online && count === 0;
+  const isSyncing = status.isSyncing || syncing;
 
   return (
     <div
@@ -37,21 +47,32 @@ export function SyncStatusBar() {
       <div className="flex items-center gap-2 font-medium">
         {online ? <Cloud size={16} /> : <CloudOff size={16} />}
         <span>{online ? "Online" : "Offline"}</span>
-        {allSynced ? (
+        {isSyncing ? (
+          <span className="flex items-center gap-1">
+            <Loader2 size={14} className="animate-spin" /> Menyinkron...
+          </span>
+        ) : allSynced ? (
           <span className="flex items-center gap-1 text-good">
             <Check size={14} /> Tersinkron
           </span>
         ) : count > 0 ? (
           <span className="opacity-80">· {count} belum tersinkron</span>
         ) : null}
+        {status.syncError && (
+          <span className="text-danger" title={status.syncError}>
+            · Galat
+          </span>
+        )}
       </div>
       <button
         type="button"
-        disabled={!online}
+        disabled={!online || isSyncing}
+        onClick={() => void handleSync()}
         className="flex items-center gap-1.5 rounded px-2 py-1 font-semibold hover:bg-white/50 disabled:opacity-40"
-        title="Sinkron manual (cadangan)"
+        title="Sinkron sekarang"
       >
-        <RefreshCw size={14} /> Sinkron
+        <RefreshCw size={14} className={isSyncing ? "animate-spin" : ""} />{" "}
+        Sinkron
       </button>
     </div>
   );

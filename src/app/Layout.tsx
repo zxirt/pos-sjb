@@ -1,20 +1,34 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { Menu, X, Store, LogOut } from "lucide-react";
 import { NAV_ITEMS } from "./nav";
 import { SyncStatusBar } from "@/components/SyncStatusBar";
 import { useAuth } from "@/features/auth/AuthContext";
+import { initSyncEngine, cleanupSyncEngine } from "@/lib/sync";
+import { supabase, isSupabaseConfigured, STORE_ID } from "@/lib/supabase";
 import { cn } from "@/lib/cn";
 
 /**
  * Shell aplikasi: sidebar (desktop) / drawer (mobile) + bar status sync.
- * Menu disaring berdasarkan peran pengguna.
+ * Engine sync dimulai saat user login & Supabase terkonfigurasi.
  */
 export function Layout() {
   const { user, signOut } = useAuth();
   const [open, setOpen] = useState(false);
   const role = user?.role ?? "kasir";
   const items = NAV_ITEMS.filter((i) => i.roles.includes(role));
+
+  useEffect(() => {
+    if (!user || !isSupabaseConfigured || !supabase) return;
+    void initSyncEngine({
+      storeId: STORE_ID,
+      supabaseUrl: import.meta.env.VITE_SUPABASE_URL as string,
+      supabaseKey: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+    });
+    return () => {
+      void cleanupSyncEngine();
+    };
+  }, [user]);
 
   return (
     <div className="min-h-screen md:grid md:grid-cols-[240px_1fr]">
