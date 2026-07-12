@@ -82,11 +82,11 @@ Aturan ini mengikat semua kode baru. Pelanggaran = bug data/sync.
 | 4 | **Supplier** | ✅ Fase 2 | `features/suppliers/` |
 | 5 | **Customer** (limit kredit, harga khusus) | ✅ Fase 2 | `features/customers/` |
 | 6 | **Hutang & Piutang** (daftar, status, jatuh tempo/terlambat, cicilan, pelunasan FIFO per pihak, edit/hapus pembayaran) | ✅ Fase 4/4c | `features/credit/`, `features/purchasing/` |
-| 7 | **Cek Harga** (lookup cepat + riwayat beli) | ⬜ Fase 6 | placeholder `/cek-harga` |
+| 7 | **Cek Harga** (lookup cepat + riwayat beli) | ✅ Fase 6 | `features/items/CekHargaPage.tsx` |
 | 8 | **Scan Barcode** (HID + kamera @zxing) | ✅ Fase 3 | `features/sales/BarcodeScanner.tsx` |
-| 9 | **Laporan** (penjualan, laba/rugi, piutang/hutang, arus kas, ekspor CSV/PDF) | ⬜ Fase 6 | placeholder `/laporan` |
-| 10 | **Struk/Nota** (thermal 58/80mm + digital; template editable) | 🟡 fondasi ada (Fase 3) → editable Fase 7 | `features/sales/receipt.ts`, `printReceipt.ts` |
-| 11 | **Pengaturan** (profil toko, toggle stok/harga, owner_pin, backup/restore) | 🟡 sebagian (seed + toggle) → lengkap Fase 8 | `features/settings/settings.ts`, placeholder `/pengaturan` |
+| 9 | **Laporan** (penjualan, laba/rugi, piutang/hutang, arus kas, ekspor CSV) | ✅ Fase 6 | `features/reports/LaporanPage.tsx` |
+| 10 | **Struk/Nota** (thermal 58/80mm + digital; template token) | ✅ Fase 7 | `features/sales/printReceipt.ts` |
+| 11 | **Pengaturan** (profil toko, toggle stok/harga, owner_pin, backup/restore) | ✅ Fase 8 | `features/settings/SettingsPage.tsx` |
 
 Tambahan di luar daftar asli: **Riwayat Transaksi** (`features/history/`, Fase 4b) — daftar semua penjualan+pembelian dengan edit/hapus; **Pembelian** terpisah (`features/purchasing/`, Fase 4c, `/pembelian`).
 
@@ -117,8 +117,7 @@ src/
   components/  ui/ (Button, Input, Card, Modal, MoneyInput),
                SyncStatusBar, PagePlaceholder
   hooks/       useOnlineStatus
-supabase/migrations/  0001_init.sql, 0002_seed_owner.sql
-                      (0003 — Fase 5: lihat §10.7, BELUM dibuat)
+supabase/migrations/  0001_init.sql, 0002_seed_owner.sql, 0003_phase5_sync.sql
 ```
 
 ---
@@ -186,7 +185,7 @@ payments, stock_ledger
 | v3 | Index `deleted` di receivables, payments |
 | v4 | Tabel `counters` (lokal) + index `no_nota`,`status` di transactions |
 | v5 | Tabel `purchases`/`purchase_items` + index `purchase_id` di payables |
-| **v6** | **(Fase 5 — BELUM)** kembalikan index `dirty` di `transactions` (lihat §10.2) |
+| **v6** | **(Fase 5)** kembalikan index `dirty` di `transactions` untuk query push |
 
 > **Catatan**: `transactions` TAK ber-index `deleted` → filter `deleted` di memori.
 
@@ -261,17 +260,17 @@ Multi-satuan, favorit, diskon per-baris, **biaya tambahan** (free-text+nominal),
 ### ✅ Fase 4c — Menu Pembelian terpisah + Pelunasan per pihak
 `/pembelian` (pemilik-only, `PurchasePage`). `SettlementModal` (Hutang-Piutang): pilih pihak → tagihan belum lunas (multi-pilih) → **alokasi FIFO** (`allocate.ts` murni+test) → batch pay (`bayarPiutangBatch`/`bayarHutangBatch`). **Tanggal pembayaran bisa dipilih** (default hari ini, max hari ini) di semua jalur bayar.
 
-### 🟡 Fase 5 — **Sync Engine** ← BERIKUTNYA (blueprint di §10)
-Otomatis & terus-menerus saat online; pull/push dua arah; konflik LWW; stok via ledger merge+recompute. **Dijeda di tahap desain** — dua keputusan menunggu jawaban user (lihat §10.1).
+### ✅ Fase 5 — **Sync Engine**
+Otomatis & terus-menerus saat online; event-driven (tanpa timer); pull/push dua arah; konflik LWW server wins; stok via ledger merge+recompute; Realtime subscription; unit test `clean` + `merge`.
 
-### ⬜ Fase 6 — Laporan + Cek Harga
-Penjualan harian/periode (omzet, jml transaksi, terlaris), laba/rugi (harga beli vs jual), piutang/hutang + jatuh tempo, arus kas (masuk vs keluar termasuk pelunasan), ekspor CSV/PDF sisi klien. Cek Harga: lookup cepat (nama/barcode) → harga eceran+grosir, stok, **riwayat pembelian** (dari ledger `restock` yang menyimpan harga_beli+supplier_id).
+### ✅ Fase 6 — Laporan + Cek Harga
+Penjualan harian/periode (omzet, jml transaksi, terlaris), laba/rugi (harga beli vs jual), piutang/hutang + jatuh tempo, arus kas (masuk vs keluar termasuk pelunasan), ekspor CSV sisi klien. Cek Harga: lookup nama/merk/barcode → harga eceran+grosir, stok semua satuan, **riwayat pembelian** (dari ledger `restock` yang menyimpan harga_beli+supplier_id).
 
-### ⬜ Fase 7 — Struk/Nota (template editable, thermal)
-Fondasi sudah ada (`receipt.ts` + `printReceipt.ts`). Fase 7 = tambah token template (`Settings.struk_template`), logo, tuning thermal **di atas struktur ini** (JANGAN buat ulang). Struk digital: share WhatsApp (`wa.me`) / ekspor PDF/gambar.
+### ✅ Fase 7 — Struk/Nota (template editable, thermal + digital)
+Token template (`Settings.struk_template`): `{nama_toko}`, `{alamat}`, `{kontak}`, `{no_nota}`, `{tanggal}`, `{tipe}`, `{items}`, `{biaya}`, `{subtotal}`, `{total}`, `{bayar}`, `{kembali}`, `{sisa}`, `{footer}`, `{catatan}`. Tetap di atas struktur `receipt.ts` + `printReceipt.ts` (tidak dibangun ulang). Struk digital: share WhatsApp via `wa.me/?text=`.
 
-### ⬜ Fase 8 — Pengaturan + poles + seed + README + hardening
-Profil toko lengkap, **dua toggle** stok/harga + owner_pin di UI, manajemen pengguna, backup/restore lokal, status sync, data seed demo, README setup Supabase+deploy gratis, hardening (limit free tier, error handling).
+### ✅ Fase 8 — Pengaturan + poles + seed + README + hardening
+Profil toko lengkap, **dua toggle** stok/harga + owner_pin di UI, manajemen pengguna (daftar + ganti peran), backup/restore JSON lokal, README setup. Struk template editor, ukuran printer 58/80mm, toggle logo/alamat di struk. Status fase sudah diperbarui di README/SPESIFIKASI.
 
 ---
 

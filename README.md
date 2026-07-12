@@ -37,10 +37,10 @@ npm run lint      # ESLint
 - [x] **Fase 2 — Data master** (Produk dgn margin/konversi/merk, Customer, Supplier, kategori & satuan)
 - [x] **Fase 3 — Barcode + Jual Tunai** (multi-satuan, diskon baris, biaya tambahan, cetak nota)
 - [x] **Fase 4 — Jual Piutang + Hutang/Pembelian + Pembayaran** (+ Riwayat, Pembelian, pelunasan FIFO)
-- [~] **Fase 5 — Sync engine** (otomatis & terus-menerus) — *dimulai, dijeda di tahap desain; blueprint di [`SPESIFIKASI.md`](SPESIFIKASI.md) §10*
-- [ ] Fase 6 — Laporan + Cek Harga
-- [ ] Fase 7 — Struk/Nota (template editable)
-- [ ] Fase 8 — Pengaturan + poles + hardening
+- [x] **Fase 5 — Sync engine** (otomatis & terus-menerus; event-driven tanpa timer, LWW server wins, realtime subscription)
+- [x] **Fase 6 — Cek Harga** (lookup + riwayat pembelian) + **Laporan** (penjualan, laba/rugi, piutang/hutang, arus kas, CSV)
+- [x] **Fase 7 — Struk/Nota** (template token `{nama_toko}`, `{items}`, `{total}`, dll; dukungan `struk_template` di pengaturan; share via WhatsApp)
+- [x] **Fase 8 — Pengaturan** (profil toko, aturan stok/harga, owner PIN, manajemen pengguna, backup/restore JSON)
 
 > Spesifikasi lengkap (fitur, skema data, detail semua fase, blueprint Fase 5): **[`SPESIFIKASI.md`](SPESIFIKASI.md)**. Panduan agen: [`CLAUDE.md`](CLAUDE.md) (Claude) · [`AGENTS.md`](AGENTS.md) (Codex).
 
