@@ -109,6 +109,16 @@ export class PosDB extends Dexie {
       payables:
         "id, supplier_id, purchase_id, status, jatuh_tempo, updated_at, dirty, deleted",
     });
+
+    // v6 (Fase 5): formalization untuk sync engine.
+    // - transactions: pastikan dirty ada (untuk query push; tidak ada deleted = soft-delete via baris deleted=1, tidak perlu index).
+    // - semua tabel: updated_at (LWW) + dirty (untuk pull/push) sudah ada.
+    // - stock_ledger: append-only, akan recompute setelah pull.
+    // Ini adalah checkpoint "sync engine ready".
+    this.version(6).stores({
+      transactions:
+        "id, no_nota, tipe, tanggal, customer_id, kasir_id, status, updated_at, dirty",
+    });
   }
 }
 
