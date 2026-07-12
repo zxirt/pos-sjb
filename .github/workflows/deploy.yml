@@ -26,6 +26,8 @@ jobs:
 
       - run: npm ci
       - run: npm run build
+        env:
+          BASE_URL: /pos-sjb/
 
       - uses: actions/configure-pages@v4
 

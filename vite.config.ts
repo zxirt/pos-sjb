@@ -7,7 +7,7 @@ import path from "node:path";
 // Data hidup di IndexedDB (Dexie), BUKAN di cache service worker —
 // jadi kita tidak meng-cache respons API Supabase (hindari data basi).
 export default defineConfig({
-  base: "/pos-sjb/",
+  base: process.env.BASE_URL ?? "/",
   plugins: [
     react(),
     VitePWA({
@@ -22,7 +22,7 @@ export default defineConfig({
         background_color: "#f4f2ee",
         display: "standalone",
         orientation: "portrait",
-        start_url: "/pos-sjb/",
+        start_url: ".",
         icons: [
           { src: "icons/pwa-192.png", sizes: "192x192", type: "image/png" },
           { src: "icons/pwa-512.png", sizes: "512x512", type: "image/png" },
