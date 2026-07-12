@@ -1,4 +1,7 @@
 import { createBrowserRouter } from "react-router-dom";
+
+/** Base path untuk GitHub Pages (/pos-sjb/) atau dev (/). */
+const BASENAME = import.meta.env.BASE_URL?.replace(/\/$/,"") ?? "";
 import { Layout } from "./Layout";
 import { RequireAuth } from "@/features/auth/RequireAuth";
 import { SalesPage } from "@/features/sales/SalesPage";
@@ -25,7 +28,8 @@ function guard(node: React.ReactNode, roles?: Role[]) {
  * Router. Seluruh Layout berada di balik login (RequireAuth di Layout-wrapper),
  * dan route khusus Pemilik ditambah guard peran.
  */
-export const router = createBrowserRouter([
+export const router = createBrowserRouter(
+  [
   {
     path: "/",
     element: (
@@ -80,4 +84,6 @@ export const router = createBrowserRouter([
       },
     ],
   },
-]);
+],
+  { basename: BASENAME },
+);
