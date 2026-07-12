@@ -21,6 +21,7 @@ export interface ReceiptToko {
   footer: string;
   tampilAlamat: boolean;
   ukuranPrinter: "58mm" | "80mm";
+  strukTemplate: string;
 }
 
 /** Ambil info toko untuk nota dari Settings. */
@@ -32,5 +33,6 @@ export function tokoFromSettings(s: Settings): ReceiptToko {
     footer: s.struk_footer || "Terima kasih",
     tampilAlamat: s.struk_tampil_alamat === 1,
     ukuranPrinter: s.ukuran_printer,
+    strukTemplate: s.struk_template,
   };
 }

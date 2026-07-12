@@ -1,14 +1,6 @@
 import { formatNumber } from "@/lib/money";
 import { formatTanggalJam } from "@/lib/format";
-import type { ReceiptData } from "./receipt";
-
-/**
- * Cetak nota via iframe tersembunyi + window.print(). Tanpa dependency
- * (jspdf/template editable ditunda ke Fase 7). Pengguna bisa pilih printer
- * mana pun atau "Simpan sebagai PDF" dari dialog cetak browser.
- *
- * Lebar kertas mengikuti ukuran printer di Settings (58mm / 80mm) lewat @page.
- */
+import type { ReceiptData, ReceiptToko } from "./receipt";
 
 const ESC = (s: string) =>
   s.replace(/[&<>"]/g, (c) =>
@@ -17,12 +9,8 @@ const ESC = (s: string) =>
 
 const rp = (n: number) => `Rp ${formatNumber(n)}`;
 
-/** Bangun HTML nota lengkap (dokumen mandiri untuk iframe cetak). */
-export function receiptHtml(data: ReceiptData): string {
-  const { trx, items, toko } = data;
-  const lebar = toko.ukuranPrinter === "80mm" ? "80mm" : "58mm";
-
-  const barisItem = items
+function itemRows(items: ReceiptData["items"], _trx: ReceiptData["trx"]) {
+  return items
     .map((it) => {
       const diskon =
         it.diskon_persen > 0
@@ -41,8 +29,10 @@ export function receiptHtml(data: ReceiptData): string {
         ${diskon}`;
     })
     .join("");
+}
 
-  const barisBiaya = (trx.biaya ?? [])
+function biayaRows(biaya: ReceiptData["trx"]["biaya"]) {
+  return (biaya ?? [])
     .map(
       (b) => `
         <div class="row">
@@ -51,12 +41,65 @@ export function receiptHtml(data: ReceiptData): string {
         </div>`,
     )
     .join("");
+}
 
-  const alamat =
-    toko.tampilAlamat && toko.alamat
-      ? `<div class="ctr sub">${ESC(toko.alamat)}</div>`
-      : "";
+function headerHtml(toko: ReceiptToko) {
+  const alamat = toko.tampilAlamat && toko.alamat
+    ? `<div class="ctr sub">${ESC(toko.alamat)}</div>`
+    : "";
   const kontak = toko.kontak ? `<div class="ctr sub">${ESC(toko.kontak)}</div>` : "";
+  return `
+    <div class="ctr bold big">${ESC(toko.nama)}</div>
+    ${alamat}
+    ${kontak}`;
+}
+
+function footerHtml(toko: ReceiptToko) {
+  return `<div class="ctr sub">${ESC(toko.footer)}</div>`;
+}
+
+/**
+ * Render token template sederhana.
+ * Token: {nama_toko}, {alamat}, {kontak}, {no_nota}, {tanggal}, {tipe},
+ * {items}, {biaya}, {subtotal}, {total}, {bayar}, {kembali}, {sisa}, {footer}, {catatan}
+ */
+function renderTemplate(
+  template: string,
+  data: ReceiptData,
+  renderedItems: string,
+  renderedBiaya: string,
+): string {
+  const { trx, toko } = data;
+  const sisa = trx.total - trx.dibayar;
+  return template
+    .replace(/\{nama_toko\}/g, ESC(toko.nama))
+    .replace(/\{alamat\}/g, ESC(toko.alamat || ""))
+    .replace(/\{kontak\}/g, ESC(toko.kontak || ""))
+    .replace(/\{no_nota\}/g, ESC(trx.no_nota || trx.id.slice(0, 8).toUpperCase()))
+    .replace(/\{tanggal\}/g, formatTanggalJam(trx.tanggal))
+    .replace(/\{tipe\}/g, trx.tipe === "tunai" ? "TUNAI" : "PIUTANG")
+    .replace(/\{items\}/g, renderedItems)
+    .replace(/\{biaya\}/g, renderedBiaya)
+    .replace(/\{subtotal\}/g, rp(trx.subtotal))
+    .replace(/\{total\}/g, rp(trx.total))
+    .replace(/\{bayar\}/g, rp(trx.dibayar))
+    .replace(/\{kembali\}/g, rp(trx.kembalian))
+    .replace(/\{sisa\}/g, sisa > 0 ? rp(sisa) : "")
+    .replace(/\{footer\}/g, ESC(toko.footer || "Terima kasih"))
+    .replace(/\{catatan\}/g, ESC(trx.catatan || ""));
+}
+
+export function receiptHtml(data: ReceiptData): string {
+  const { trx, items, toko } = data;
+  const lebar = toko.ukuranPrinter === "80mm" ? "80mm" : "58mm";
+
+  const renderedItems = itemRows(items, trx);
+  const renderedBiaya = biayaRows(trx.biaya);
+  const sisa = trx.total - trx.dibayar;
+
+  const bodyContent = toko.strukTemplate
+    ? renderTemplate(toko.strukTemplate, data, renderedItems, renderedBiaya)
+    : defaultBody(data, renderedItems, renderedBiaya, sisa);
 
   return `<!doctype html><html><head><meta charset="utf-8">
 <title>Nota ${ESC(trx.id.slice(0, 8))}</title>
@@ -78,46 +121,49 @@ export function receiptHtml(data: ReceiptData): string {
   .item .nama { font-weight: 600; }
   .tot { font-size: 13px; font-weight: 700; }
 </style></head><body>
-  <div class="ctr bold big">${ESC(toko.nama)}</div>
-  ${alamat}
-  ${kontak}
-  <div class="sep"></div>
-  <div class="row sub">
-    <div>${formatTanggalJam(trx.tanggal)}</div>
-    <div>${trx.tipe === "tunai" ? "TUNAI" : "PIUTANG"}</div>
-  </div>
-  <div class="sub">No: ${ESC(trx.no_nota || trx.id.slice(0, 8).toUpperCase())}</div>
-  <div class="sep"></div>
-  ${barisItem || '<div class="sub ctr">(tanpa barang)</div>'}
-  ${barisBiaya ? `<div class="sep"></div>${barisBiaya}` : ""}
-  <div class="sep"></div>
-  <div class="row"><div>Subtotal</div><div>${rp(trx.subtotal)}</div></div>
-  ${
-    (trx.biaya ?? []).length
-      ? `<div class="row"><div>Biaya</div><div>${rp(
-          trx.biaya.reduce((s, b) => s + b.nominal, 0),
-        )}</div></div>`
-      : ""
-  }
-  <div class="row tot"><div>TOTAL</div><div>${rp(trx.total)}</div></div>
-  <div class="row"><div>Bayar</div><div>${rp(trx.dibayar)}</div></div>
-  ${
-    trx.total > trx.dibayar
-      ? `<div class="row bold"><div>SISA PIUTANG</div><div>${rp(
-          trx.total - trx.dibayar,
-        )}</div></div>`
-      : `<div class="row"><div>Kembali</div><div>${rp(trx.kembalian)}</div></div>`
-  }
-  ${trx.catatan ? `<div class="sep"></div><div class="sub">Catatan: ${ESC(trx.catatan)}</div>` : ""}
-  <div class="sep"></div>
-  <div class="ctr sub">${ESC(toko.footer)}</div>
+  ${bodyContent}
 </body></html>`;
 }
 
-/**
- * Cetak nota: suntik HTML ke iframe tersembunyi, panggil print, lalu bersihkan.
- * Mengembalikan Promise yang selesai setelah dialog cetak dibuka.
- */
+function defaultBody(
+  data: ReceiptData,
+  renderedItems: string,
+  renderedBiaya: string,
+  sisa: number,
+): string {
+  const { trx, toko } = data;
+  return `
+    ${headerHtml(toko)}
+    <div class="sep"></div>
+    <div class="row sub">
+      <div>${formatTanggalJam(trx.tanggal)}</div>
+      <div>${trx.tipe === "tunai" ? "TUNAI" : "PIUTANG"}</div>
+    </div>
+    <div class="sub">No: ${ESC(trx.no_nota || trx.id.slice(0, 8).toUpperCase())}</div>
+    <div class="sep"></div>
+    ${renderedItems || '<div class="sub ctr">(tanpa barang)</div>'}
+    ${renderedBiaya ? `<div class="sep"></div>${renderedBiaya}` : ""}
+    <div class="sep"></div>
+    <div class="row"><div>Subtotal</div><div>${rp(trx.subtotal)}</div></div>
+    ${
+      (trx.biaya ?? []).length
+        ? `<div class="row"><div>Biaya</div><div>${rp(
+            trx.biaya.reduce((s, b) => s + b.nominal, 0),
+          )}</div></div>`
+        : ""
+    }
+    <div class="row tot"><div>TOTAL</div><div>${rp(trx.total)}</div></div>
+    <div class="row"><div>Bayar</div><div>${rp(trx.dibayar)}</div></div>
+    ${
+      sisa > 0
+        ? `<div class="row bold"><div>SISA PIUTANG</div><div>${rp(sisa)}</div></div>`
+        : `<div class="row"><div>Kembali</div><div>${rp(trx.kembalian)}</div></div>`
+    }
+    ${trx.catatan ? `<div class="sep"></div><div class="sub">Catatan: ${ESC(trx.catatan)}</div>` : ""}
+    <div class="sep"></div>
+    ${footerHtml(toko)}`;
+}
+
 export function printReceipt(data: ReceiptData): Promise<void> {
   return new Promise((resolve) => {
     const iframe = document.createElement("iframe");
@@ -130,7 +176,6 @@ export function printReceipt(data: ReceiptData): Promise<void> {
     document.body.appendChild(iframe);
 
     const cleanup = () => {
-      // Beri jeda agar dialog cetak sempat membaca dokumen sebelum dihapus.
       setTimeout(() => iframe.remove(), 1000);
       resolve();
     };
@@ -147,12 +192,40 @@ export function printReceipt(data: ReceiptData): Promise<void> {
 
     const win = iframe.contentWindow!;
     win.onafterprint = cleanup;
-    // Tunggu render lalu cetak.
     setTimeout(() => {
       win.focus();
       win.print();
-      // Fallback bila onafterprint tak terpicu (sebagian browser).
       setTimeout(cleanup, 500);
     }, 150);
   });
+}
+
+export function receiptWhatsAppUrl(data: ReceiptData): string {
+  const { trx, toko } = data;
+  const sisa = trx.total - trx.dibayar;
+  const lines = [
+    `*${toko.nama}*`,
+    toko.alamat || "",
+    `No: ${trx.no_nota || ""}`,
+    `${formatTanggalJam(trx.tanggal)}`,
+    "----------------",
+  ];
+  for (const item of data.items) {
+    const diskon = item.diskon_persen
+      ? ` (disk ${item.diskon_persen}%)`
+      : item.diskon_nominal
+        ? ` (disk ${rp(item.diskon_nominal)})`
+        : "";
+    lines.push(`${item.nama}`);
+    lines.push(`  ${formatNumber(item.qty)} ${item.satuan} × ${rp(item.harga)}${diskon} = ${rp(item.subtotal)}`);
+  }
+  lines.push("----------------");
+  lines.push(`Total: ${rp(trx.total)}`);
+  lines.push(`Bayar: ${rp(trx.dibayar)}`);
+  if (sisa > 0) lines.push(`Sisa: ${rp(sisa)}`);
+  else lines.push(`Kembali: ${rp(trx.kembalian)}`);
+  if (trx.catatan) lines.push(`Catatan: ${trx.catatan}`);
+  lines.push(`_${toko.footer || "Terima kasih"}_`);
+
+  return `https://wa.me/?text=${encodeURIComponent(lines.filter(Boolean).join("\n"))}`;
 }

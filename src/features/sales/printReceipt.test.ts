@@ -39,6 +39,7 @@ function buildData(): ReceiptData {
       footer: "Terima kasih",
       tampilAlamat: true,
       ukuranPrinter: "58mm",
+      strukTemplate: "",
     },
   };
 }

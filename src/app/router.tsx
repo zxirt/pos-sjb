@@ -1,6 +1,5 @@
 import { createBrowserRouter } from "react-router-dom";
 import { Layout } from "./Layout";
-import { PagePlaceholder } from "@/components/PagePlaceholder";
 import { RequireAuth } from "@/features/auth/RequireAuth";
 import { SalesPage } from "@/features/sales/SalesPage";
 import { CreditSalesPage } from "@/features/credit/CreditSalesPage";
@@ -10,6 +9,9 @@ import { PurchasePage } from "@/features/purchasing/PurchasePage";
 import { ProductsPage } from "@/features/items/ProductsPage";
 import { CustomersPage } from "@/features/customers/CustomersPage";
 import { SuppliersPage } from "@/features/suppliers/SuppliersPage";
+import { CekHargaPage } from "@/features/items/CekHargaPage";
+import { LaporanPage } from "@/features/reports/LaporanPage";
+import { SettingsPage } from "@/features/settings/SettingsPage";
 import type { Role } from "@/db/types";
 
 const PEMILIK: Role[] = ["pemilik"];
@@ -42,13 +44,7 @@ export const router = createBrowserRouter([
       },
       {
         path: "cek-harga",
-        element: (
-          <PagePlaceholder
-            title="Cek Harga"
-            fase="Fase 6"
-            desc="Lookup cepat: nama, harga beli, harga jual, margin, stok, dan riwayat pembelian."
-          />
-        ),
+        element: <CekHargaPage />,
       },
       {
         path: "riwayat",
@@ -76,25 +72,11 @@ export const router = createBrowserRouter([
       },
       {
         path: "laporan",
-        element: guard(
-          <PagePlaceholder
-            title="Laporan"
-            fase="Fase 6"
-            desc="Penjualan, laba/rugi, arus kas, dan ekspor CSV/PDF."
-          />,
-          PEMILIK,
-        ),
+        element: guard(<LaporanPage />, PEMILIK),
       },
       {
         path: "pengaturan",
-        element: guard(
-          <PagePlaceholder
-            title="Pengaturan"
-            fase="Fase 8"
-            desc="Profil toko, format struk, opsi stok & harga, backup/restore."
-          />,
-          PEMILIK,
-        ),
+        element: guard(<SettingsPage />, PEMILIK),
       },
     ],
   },
