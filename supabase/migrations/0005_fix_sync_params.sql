@@ -7,7 +7,8 @@
 -- ============================================================================
 
 -- 1) sync_push: parameter store_id, rows (sesuai PushRequest client)
-create or replace function sync_push(store_id uuid, rows jsonb)
+drop function if exists sync_push(uuid, jsonb);
+create function sync_push(store_id uuid, rows jsonb)
 returns jsonb language plpgsql security definer
 as $$
 declare
@@ -44,7 +45,8 @@ end;
 $$;
 
 -- 2) sync_pull: parameter store_id, tables (sesuai PullRequest client)
-create or replace function sync_pull(store_id uuid, tables jsonb)
+drop function if exists sync_pull(uuid, jsonb);
+create function sync_pull(store_id uuid, tables jsonb)
 returns jsonb language plpgsql security definer
 as $$
 declare

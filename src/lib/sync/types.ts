@@ -19,14 +19,12 @@ import type {
   Payment,
   Purchase,
   PurchaseItem,
-  Settings,
 } from "@/db/types";
 
 // ============================================================================
 // Sync table registry — yang perlu di-sync
 // ============================================================================
 export const SYNC_TABLES = [
-  "settings",
   "categories",
   "units",
   "items",
@@ -47,7 +45,6 @@ export type SyncTableName = (typeof SYNC_TABLES)[number];
 
 // Type map untuk table name → entity type
 export interface SyncTableMap {
-  settings: Settings;
   categories: Category;
   units: Unit;
   items: Item;
