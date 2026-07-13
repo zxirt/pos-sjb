@@ -10,6 +10,7 @@ import {
   History,
   ShoppingBag,
   Settings,
+  FileSpreadsheet,
   type LucideIcon,
 } from "lucide-react";
 import type { Role } from "@/db/types";
@@ -29,6 +30,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/cek-harga", label: "Cek Harga", icon: Search, roles: ["pemilik", "kasir"] },
   { to: "/riwayat", label: "Riwayat", icon: History, roles: ["pemilik", "kasir"] },
   { to: "/produk", label: "Produk", icon: Package, roles: ["pemilik"] },
+  { to: "/import-produk", label: "Import Produk", icon: FileSpreadsheet, roles: ["pemilik"] },
   { to: "/customer", label: "Customer", icon: Users, roles: ["pemilik", "kasir"] },
   { to: "/supplier", label: "Supplier", icon: Truck, roles: ["pemilik"] },
   { to: "/pembelian", label: "Pembelian", icon: ShoppingBag, roles: ["pemilik"] },

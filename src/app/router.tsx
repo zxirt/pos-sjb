@@ -13,6 +13,7 @@ import { ProductsPage } from "@/features/items/ProductsPage";
 import { CustomersPage } from "@/features/customers/CustomersPage";
 import { SuppliersPage } from "@/features/suppliers/SuppliersPage";
 import { CekHargaPage } from "@/features/items/CekHargaPage";
+import { ImportPage } from "@/features/items/ImportPage";
 import { LaporanPage } from "@/features/reports/LaporanPage";
 import { SettingsPage } from "@/features/settings/SettingsPage";
 import type { Role } from "@/db/types";
@@ -57,6 +58,10 @@ export const router = createBrowserRouter(
       {
         path: "produk",
         element: guard(<ProductsPage />, PEMILIK),
+      },
+      {
+        path: "import-produk",
+        element: guard(<ImportPage />, PEMILIK),
       },
       {
         path: "customer",
