@@ -20,7 +20,6 @@ import type {
   Purchase,
   PurchaseItem,
   Settings,
-  User,
 } from "@/db/types";
 
 // ============================================================================
@@ -28,7 +27,6 @@ import type {
 // ============================================================================
 export const SYNC_TABLES = [
   "settings",
-  "users",
   "categories",
   "units",
   "items",
@@ -50,7 +48,6 @@ export type SyncTableName = (typeof SYNC_TABLES)[number];
 // Type map untuk table name → entity type
 export interface SyncTableMap {
   settings: Settings;
-  users: User;
   categories: Category;
   units: Unit;
   items: Item;

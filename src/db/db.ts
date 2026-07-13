@@ -126,6 +126,16 @@ export class PosDB extends Dexie {
         "id, no_nota, tipe, tanggal, customer_id, kasir_id, status, updated_at, dirty, deleted",
       users: "id, email, role, updated_at, dirty, deleted",
     });
+
+    // v8 (Fase 5): users tidak di-sync via engine (pakai profiles di server);
+    // reset dirty pada record users yang tersisa agar sync count akurat.
+    this.version(8).stores({
+      transactions:
+        "id, no_nota, tipe, tanggal, customer_id, kasir_id, status, updated_at, dirty, deleted",
+      users: "id, email, role, updated_at, dirty, deleted",
+    }).upgrade(async () => {
+      await db.users.where("dirty").equals(1).modify({ dirty: 0, sync_state: "synced" });
+    });
   }
 }
 
