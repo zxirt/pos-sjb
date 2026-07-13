@@ -3,7 +3,7 @@ import { Upload, FileSpreadsheet, AlertCircle, Check, Loader2, Download } from "
 import * as XLSX from "xlsx";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { createItem } from "./items";
+import { createItem, type ItemUnitFormData } from "./items";
 import { formatRupiah } from "@/lib/money";
 
 const FIELD_LABEL: Record<string, string> = {
@@ -16,6 +16,17 @@ const FIELD_LABEL: Record<string, string> = {
   stok_min: "Stok Minimum",
   harga_beli: "Harga Beli",
   harga_jual: "Harga Jual",
+  deskripsi: "Supplier / Catatan",
+  satuan_2: "Satuan 2",
+  konversi_2: "Konversi 2",
+  barcode_2: "Barcode 2",
+  harga_beli_2: "Harga Beli 2",
+  harga_jual_2: "Harga Jual 2",
+  satuan_3: "Satuan 3",
+  konversi_3: "Konversi 3",
+  barcode_3: "Barcode 3",
+  harga_beli_3: "Harga Beli 3",
+  harga_jual_3: "Harga Jual 3",
 };
 
 const REQUIRED_FIELDS = ["nama", "satuan_dasar"];
@@ -24,24 +35,28 @@ interface RowData {
   row: number;
   parsed: Record<string, string | number>;
   errors: string[];
+  unit2: ItemUnitFormData | null;
+  unit3: ItemUnitFormData | null;
 }
 
 const COL_MAP: Record<string, string> = {
-  nama: "nama",
-  "nama barang": "nama",
-  merk: "merk",
-  merek: "merk",
-  kategori: "kategori",
-  kategory: "kategori",
+  nama: "nama", "nama barang": "nama",
+  merk: "merk", merek: "merk",
+  kategori: "kategori", kategory: "kategori",
   barcode: "barcode",
-  deskripsi: "deskripsi",
-  satuan: "satuan_dasar",
-  "satuan dasar": "satuan_dasar",
-  stok: "stok",
-  "stok awal": "stok",
+  deskripsi: "deskripsi", catatan: "deskripsi", supplier: "deskripsi",
+  satuan: "satuan_dasar", "satuan dasar": "satuan_dasar",
+  stok: "stok", "stok awal": "stok",
   "stok minimum": "stok_min",
-  "harga beli": "harga_beli",
-  "harga jual": "harga_jual",
+  "harga beli": "harga_beli", "harga jual": "harga_jual",
+  "satuan 2": "satuan_2", satuan2: "satuan_2",
+  "konversi 2": "konversi_2", konversi2: "konversi_2",
+  "barcode 2": "barcode_2", barcode2: "barcode_2",
+  "harga beli 2": "harga_beli_2", "harga jual 2": "harga_jual_2",
+  "satuan 3": "satuan_3", satuan3: "satuan_3",
+  "konversi 3": "konversi_3", konversi3: "konversi_3",
+  "barcode 3": "barcode_3", barcode3: "barcode_3",
+  "harga beli 3": "harga_beli_3", "harga jual 3": "harga_jual_3",
 };
 
 function autoMap(headers: string[]): Record<number, string> {
@@ -63,27 +78,39 @@ function parseNumber(v: unknown): number {
   return 0;
 }
 
+function parseConv(v: unknown): number {
+  if (typeof v === "number") return Math.abs(v) || 1;
+  if (typeof v === "string") {
+    const n = parseNumber(v);
+    return Math.max(1, n);
+  }
+  return 1;
+}
+
+function getColVal(raw: Record<string, string | number>, keys: string[], colIdx: string | undefined): string | number {
+  if (colIdx !== undefined) return (raw as any)[keys[Number(colIdx)]] ?? "";
+  return "";
+}
+
 function parseRows(sheet: XLSX.WorkSheet, mapping: Record<number, string>): RowData[] {
   const rows: RowData[] = [];
   const raw: Record<string, string | number>[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
   for (let i = 0; i < raw.length; i++) {
     const r = raw[i];
+    const keys = Object.keys(r);
     const parsed: Record<string, string | number> = {};
     const errors: string[] = [];
+    const numKeys = new Set(["stok", "stok_min", "harga_beli", "harga_jual", "konversi_2", "harga_beli_2", "harga_jual_2", "konversi_3", "harga_beli_3", "harga_jual_3"]);
     for (const key of Object.keys(FIELD_LABEL)) {
-      const colIdx = Object.entries(mapping).find(([, v]) => v === key)?.[0];
-      if (colIdx !== undefined) {
-        const rawVal = (r as any)[Object.keys(r)[Number(colIdx)]];
-        if (key === "stok" || key === "stok_min" || key === "harga_beli" || key === "harga_jual") {
-          parsed[key] = parseNumber(rawVal);
-        } else {
-          parsed[key] = String(rawVal ?? "").trim();
-        }
+      const entry = Object.entries(mapping).find(([, v]) => v === key);
+      if (entry) {
+        const rawVal = getColVal(r, keys, entry[0]);
+        parsed[key] = numKeys.has(key) ? parseNumber(rawVal) : String(rawVal ?? "").trim();
       } else {
-        if (key === "stok") parsed[key] = 0;
-        else if (key === "stok_min") parsed[key] = 0;
-        else if (key === "harga_beli") parsed[key] = 0;
-        else if (key === "harga_jual") parsed[key] = 0;
+        if (numKeys.has(key)) parsed[key] = 0;
+        else if (key === "satuan_2" || key === "satuan_3") parsed[key] = "";
+        else if (key === "barcode_2" || key === "barcode_3") parsed[key] = "";
+        else if (key === "deskripsi") parsed[key] = "";
         else if (key === "barcode") parsed[key] = "";
         else if (key === "merk") parsed[key] = "";
         else if (key === "kategori") parsed[key] = "";
@@ -93,39 +120,54 @@ function parseRows(sheet: XLSX.WorkSheet, mapping: Record<number, string>): RowD
     for (const f of REQUIRED_FIELDS) {
       if (!parsed[f]) errors.push(`${FIELD_LABEL[f]} harus diisi`);
     }
+    const unit2: ItemUnitFormData | null = parsed.satuan_2 ? {
+      satuan: parsed.satuan_2 as string,
+      konversi: parseConv(parsed.konversi_2 ?? 1),
+      barcode: String(parsed.barcode_2 ?? ""),
+      harga_beli: (parsed.harga_beli_2 as number) ?? 0,
+      harga_jual: (parsed.harga_jual_2 as number) ?? 0,
+      margin_persen: 0,
+    } : null;
+    const unit3: ItemUnitFormData | null = parsed.satuan_3 ? {
+      satuan: parsed.satuan_3 as string,
+      konversi: parseConv(parsed.konversi_3 ?? 1),
+      barcode: String(parsed.barcode_3 ?? ""),
+      harga_beli: (parsed.harga_beli_3 as number) ?? 0,
+      harga_jual: (parsed.harga_jual_3 as number) ?? 0,
+      margin_persen: 0,
+    } : null;
     if (errors.length > 0) parsed._hasError = 1;
-    rows.push({ row: i + 2, parsed, errors });
+    rows.push({ row: i + 2, parsed, errors, unit2, unit3 });
   }
   return rows;
 }
 
 function downloadTemplate() {
   const headers = [
-    "Nama Barang",
-    "Merk",
-    "Kategori",
-    "Barcode",
-    "Satuan Dasar",
-    "Stok Awal",
-    "Stok Minimum",
-    "Harga Beli",
-    "Harga Jual",
+    "Nama Barang", "Merk", "Kategori", "Barcode",
+    "Satuan Dasar", "Stok Awal", "Stok Minimum", "Harga Beli", "Harga Jual",
+    "Supplier / Catatan",
+    "Satuan 2", "Konversi 2", "Barcode 2", "Harga Beli 2", "Harga Jual 2",
+    "Satuan 3", "Konversi 3", "Barcode 3", "Harga Beli 3", "Harga Jual 3",
   ];
   const example = [
-    "Semen Padang 50kg",
-    "Padang",
-    "Bahan Bangunan",
-    "8991234567890",
-    "ZAK",
-    50,
-    10,
-    52000,
-    58000,
+    "Semen Padang 50kg", "Padang", "Bahan Bangunan", "8991234567890",
+    "ZAK", 50, 10, 52000, 58000,
+    "PT Semen Padang",
+    "Karung", 40, "", 51000, 57000,
+    "", "", "", "", "",
   ];
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet([headers, example]);
+  const colW = headers.map((h) => ({ wch: Math.max(h.length * 2, 14) }));
+  ws["!cols"] = colW;
   XLSX.utils.book_append_sheet(wb, ws, "Template");
   XLSX.writeFile(wb, "template-import-produk.xlsx");
+}
+
+function fmt(v: unknown): string {
+  if (typeof v === "number") return formatRupiah(v);
+  return String(v || "") || "—";
 }
 
 export function ImportPage() {
@@ -159,8 +201,15 @@ export function ImportPage() {
     const m = { ...mapping, [colIdx]: field };
     setMapping(m);
     if (rows) {
-      const wb = XLSX.read(fileRef.current?.files?.[0], { type: "array" });
-      setRows(parseRows(wb.Sheets[wb.SheetNames[0]], m));
+      const f = fileRef.current?.files?.[0];
+      if (!f) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const data = new Uint8Array(e.target!.result as ArrayBuffer);
+        const wb = XLSX.read(data, { type: "array" });
+        setRows(parseRows(wb.Sheets[wb.SheetNames[0]], m));
+      };
+      reader.readAsArrayBuffer(f);
     }
   }
 
@@ -175,12 +224,15 @@ export function ImportPage() {
     let nok = 0;
     for (const r of validRows) {
       try {
+        const units: ItemUnitFormData[] = [];
+        if (r.unit2) units.push(r.unit2);
+        if (r.unit3) units.push(r.unit3);
         await createItem({
           nama: r.parsed.nama as string,
           merk: String(r.parsed.merk ?? ""),
           kategori: String(r.parsed.kategori ?? ""),
           barcode: String(r.parsed.barcode ?? ""),
-          deskripsi: "",
+          deskripsi: String(r.parsed.deskripsi ?? ""),
           satuan_dasar: r.parsed.satuan_dasar as string,
           stok: (r.parsed.stok as number) ?? 0,
           stok_min: (r.parsed.stok_min as number) ?? 0,
@@ -190,7 +242,7 @@ export function ImportPage() {
           basis_harga: "margin",
           harga_grosir: [],
           favorit: 0,
-          units: [],
+          units,
         });
         ok++;
       } catch {
@@ -203,7 +255,7 @@ export function ImportPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="mx-auto max-w-5xl">
       <h1 className="mb-4 text-2xl font-bold">Import Produk dari Excel</h1>
 
       <Card className="mb-6 p-5">
@@ -251,9 +303,7 @@ export function ImportPage() {
                 >
                   <option value="">— Abaikan —</option>
                   {Object.entries(FIELD_LABEL).map(([k, v]) => (
-                    <option key={k} value={k}>
-                      {v}
-                    </option>
+                    <option key={k} value={k}>{v}</option>
                   ))}
                 </select>
               </div>
@@ -302,14 +352,13 @@ export function ImportPage() {
                 <th className="px-4 py-2 text-right">Stok</th>
                 <th className="px-4 py-2 text-right">Harga Beli</th>
                 <th className="px-4 py-2 text-right">Harga Jual</th>
+                <th className="px-4 py-2">Satuan 2</th>
+                <th className="px-4 py-2 text-right">Harga Jual 2</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr
-                  key={r.row}
-                  className={`border-b border-line ${r.errors.length > 0 ? "bg-danger/5" : ""}`}
-                >
+                <tr key={r.row} className={`border-b border-line ${r.errors.length > 0 ? "bg-danger/5" : ""}`}>
                   <td className="px-4 py-2 text-ink-soft">{r.row}</td>
                   <td className="px-4 py-2 font-medium">
                     {r.parsed.nama || <span className="text-ink-soft">—</span>}
@@ -319,13 +368,15 @@ export function ImportPage() {
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-2">{String(r.parsed.merk || "") || "—"}</td>
-                  <td className="px-4 py-2">{String(r.parsed.kategori || "") || "—"}</td>
-                  <td className="px-4 py-2 font-mono text-xs">{String(r.parsed.barcode || "") || "—"}</td>
+                  <td className="px-4 py-2">{fmt(r.parsed.merk)}</td>
+                  <td className="px-4 py-2">{fmt(r.parsed.kategori)}</td>
+                  <td className="px-4 py-2 font-mono text-xs">{fmt(r.parsed.barcode)}</td>
                   <td className="px-4 py-2">{String(r.parsed.satuan_dasar || "") || "—"}</td>
                   <td className="px-4 py-2 text-right">{r.parsed.stok ?? 0}</td>
                   <td className="px-4 py-2 text-right">{formatRupiah((r.parsed.harga_beli as number) ?? 0)}</td>
                   <td className="px-4 py-2 text-right">{formatRupiah((r.parsed.harga_jual as number) ?? 0)}</td>
+                  <td className="px-4 py-2">{r.unit2?.satuan ?? "—"}</td>
+                  <td className="px-4 py-2 text-right">{r.unit2 ? formatRupiah(r.unit2.harga_jual) : "—"}</td>
                 </tr>
               ))}
             </tbody>
