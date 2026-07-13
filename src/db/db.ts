@@ -119,6 +119,12 @@ export class PosDB extends Dexie {
       transactions:
         "id, no_nota, tipe, tanggal, customer_id, kasir_id, status, updated_at, dirty",
     });
+
+    // v7 (Fase 5): tambah index `deleted` di transactions (laporan & history filter via .where("deleted")).
+    this.version(7).stores({
+      transactions:
+        "id, no_nota, tipe, tanggal, customer_id, kasir_id, status, updated_at, dirty, deleted",
+    });
   }
 }
 
