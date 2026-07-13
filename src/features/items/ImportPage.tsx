@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { Upload, FileSpreadsheet, AlertCircle, Check, Loader2 } from "lucide-react";
+import { Upload, FileSpreadsheet, AlertCircle, Check, Loader2, Download } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -99,6 +99,35 @@ function parseRows(sheet: XLSX.WorkSheet, mapping: Record<number, string>): RowD
   return rows;
 }
 
+function downloadTemplate() {
+  const headers = [
+    "Nama Barang",
+    "Merk",
+    "Kategori",
+    "Barcode",
+    "Satuan Dasar",
+    "Stok Awal",
+    "Stok Minimum",
+    "Harga Beli",
+    "Harga Jual",
+  ];
+  const example = [
+    "Semen Padang 50kg",
+    "Padang",
+    "Bahan Bangunan",
+    "8991234567890",
+    "ZAK",
+    50,
+    10,
+    52000,
+    58000,
+  ];
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([headers, example]);
+  XLSX.utils.book_append_sheet(wb, ws, "Template");
+  XLSX.writeFile(wb, "template-import-produk.xlsx");
+}
+
 export function ImportPage() {
   const [rows, setRows] = useState<RowData[] | null>(null);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -178,23 +207,32 @@ export function ImportPage() {
       <h1 className="mb-4 text-2xl font-bold">Import Produk dari Excel</h1>
 
       <Card className="mb-6 p-5">
-        <label className="flex cursor-pointer flex-col items-center gap-3 rounded-xl border-2 border-dashed border-line-strong p-8 text-center hover:bg-accent-soft/30">
-          <FileSpreadsheet size={40} className="text-accent" />
-          <div>
-            <p className="font-semibold">Klik untuk pilih file Excel</p>
-            <p className="mt-1 text-sm text-ink-soft">.xlsx, .xls, atau .csv</p>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <label className="flex cursor-pointer flex-col items-center gap-3 rounded-xl border-2 border-dashed border-line-strong p-8 text-center hover:bg-accent-soft/30 flex-1">
+            <FileSpreadsheet size={40} className="text-accent" />
+            <div>
+              <p className="font-semibold">Klik untuk pilih file Excel</p>
+              <p className="mt-1 text-sm text-ink-soft">.xlsx, .xls, atau .csv</p>
+            </div>
+            <Button variant="primary" size="sm" type="button">
+              <Upload size={16} /> Pilih File
+            </Button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              className="hidden"
+              onChange={(e) => e.target.files?.[0] && loadFile(e.target.files[0])}
+            />
+          </label>
+          <div className="flex flex-col items-center justify-center gap-2 pt-4">
+            <FileSpreadsheet size={32} className="text-ink-soft" />
+            <p className="text-center text-sm text-ink-soft">Unduh template<br />untuk diisi</p>
+            <Button variant="ghost" size="sm" type="button" onClick={downloadTemplate}>
+              <Download size={16} /> Template
+            </Button>
           </div>
-          <Button variant="primary" size="sm" type="button">
-            <Upload size={16} /> Pilih File
-          </Button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".xlsx,.xls,.csv"
-            className="hidden"
-            onChange={(e) => e.target.files?.[0] && loadFile(e.target.files[0])}
-          />
-        </label>
+        </div>
       </Card>
 
       {headers.length > 0 && (
