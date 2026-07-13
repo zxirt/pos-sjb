@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { Pencil, Trash2, ShoppingCart, CreditCard, ShoppingBag } from "lucide-react";
+import { Pencil, Trash2, ShoppingCart, CreditCard, ShoppingBag, Search } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { formatRupiah } from "@/lib/money";
@@ -20,7 +20,10 @@ type Filter = "semua" | "penjualan" | "pembelian";
  */
 export function HistoryPage() {
   const [filter, setFilter] = useState<Filter>("semua");
-  const rows = useLiveQuery(() => listRiwayat(filter), [filter]);
+  const [search, setSearch] = useState("");
+  const [tglAwal, setTglAwal] = useState("");
+  const [tglAkhir, setTglAkhir] = useState("");
+  const rows = useLiveQuery(() => listRiwayat(filter, search, tglAwal ? tglAwal + "T00:00:00.000Z" : undefined, tglAkhir ? tglAkhir + "T23:59:59.999Z" : undefined), [filter, search, tglAwal, tglAkhir]);
   const [editSaleId, setEditSaleId] = useState<string | null>(null);
   const [editPurchaseId, setEditPurchaseId] = useState<string | null>(null);
 
@@ -35,7 +38,7 @@ export function HistoryPage() {
     <div className="mx-auto max-w-3xl">
       <h1 className="mb-4 text-2xl font-bold">Riwayat Transaksi</h1>
 
-      <div className="mb-4 flex gap-2">
+      <div className="mb-4 flex flex-wrap gap-2">
         <TabBtn active={filter === "semua"} onClick={() => setFilter("semua")}>
           Semua
         </TabBtn>
@@ -45,6 +48,34 @@ export function HistoryPage() {
         <TabBtn active={filter === "pembelian"} onClick={() => setFilter("pembelian")}>
           Pembelian
         </TabBtn>
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" />
+          <input
+            type="text"
+            placeholder="Cari no. nota, pelanggan, catatan…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full rounded-lg border border-line bg-bg py-2 pl-9 pr-3 text-sm outline-none focus:border-accent"
+          />
+        </div>
+        <input
+          type="date"
+          value={tglAwal}
+          onChange={(e) => setTglAwal(e.target.value)}
+          className="rounded-lg border border-line bg-bg px-3 py-2 text-sm outline-none focus:border-accent"
+          title="Dari tanggal"
+        />
+        <span className="text-sm text-ink-soft">—</span>
+        <input
+          type="date"
+          value={tglAkhir}
+          onChange={(e) => setTglAkhir(e.target.value)}
+          className="rounded-lg border border-line bg-bg px-3 py-2 text-sm outline-none focus:border-accent"
+          title="Sampai tanggal"
+        />
       </div>
 
       <Card className="divide-y divide-line">

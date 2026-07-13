@@ -32,8 +32,12 @@ export interface RiwayatRow {
 /** Gabungan penjualan + pembelian, urut tanggal terbaru. Filter opsional. */
 export async function listRiwayat(
   filter: "semua" | "penjualan" | "pembelian" = "semua",
+  search: string = "",
+  tglAwal?: string,
+  tglAkhir?: string,
 ): Promise<RiwayatRow[]> {
   const rows: RiwayatRow[] = [];
+  const q = search.toLowerCase().trim();
 
   if (filter !== "pembelian") {
     // transactions tak ber-index `deleted` → filter in-memory (data 1 toko terbatas).
@@ -86,8 +90,16 @@ export async function listRiwayat(
     }
   }
 
-  rows.sort((a, b) => b.tanggal.localeCompare(a.tanggal));
-  return rows;
+  // Filter in-memory: search (no_nota, catatan, pihak) + rentang tanggal
+  const hasil = rows.filter((r) => {
+    if (q && !r.no_nota.toLowerCase().includes(q) && !(r.catatan?.toLowerCase() ?? "").includes(q) && !r.pihak.toLowerCase().includes(q)) return false;
+    if (tglAwal && r.tanggal < tglAwal) return false;
+    if (tglAkhir && r.tanggal > tglAkhir) return false;
+    return true;
+  });
+
+  hasil.sort((a, b) => b.tanggal.localeCompare(a.tanggal));
+  return hasil;
 }
 
 /** Item-item satu transaksi penjualan (non-deleted). */
