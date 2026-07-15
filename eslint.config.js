@@ -26,6 +26,12 @@ export default [
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
       "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
       "no-unused-vars": "off",
+      // TypeScript handles this better — JSX transform otomatis (React 18+) tidak perlu import React
+      "no-undef": "off",
     },
+  },
+  {
+    files: ["vite.config.ts"],
+    languageOptions: { globals: globals.node },
   },
 ];
