@@ -165,11 +165,6 @@ function downloadTemplate() {
   XLSX.writeFile(wb, "template-import-produk.xlsx");
 }
 
-function fmt(v: unknown): string {
-  if (typeof v === "number") return formatRupiah(v);
-  return String(v || "") || "—";
-}
-
 export function ImportPage() {
   const [rows, setRows] = useState<RowData[] | null>(null);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -344,40 +339,34 @@ export function ImportPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-line bg-bg text-left text-xs font-semibold uppercase text-ink-soft">
-                <th className="px-4 py-2">#</th>
-                <th className="px-4 py-2">Nama</th>
-                <th className="px-4 py-2">Merk</th>
-                <th className="px-4 py-2">Kategori</th>
-                <th className="px-4 py-2">Barcode</th>
-                <th className="px-4 py-2">Satuan</th>
-                <th className="px-4 py-2 text-right">Stok</th>
-                <th className="px-4 py-2 text-right">Harga Beli</th>
-                <th className="px-4 py-2 text-right">Harga Jual</th>
+                <th className="sticky left-0 bg-bg px-4 py-2">#</th>
+                {Object.entries(mapping).map(([colIdx, field]) =>
+                  field ? <th key={colIdx} className="whitespace-nowrap px-4 py-2">{FIELD_LABEL[field] ?? field}</th> : null
+                )}
                 <th className="px-4 py-2">Satuan 2</th>
-                <th className="px-4 py-2 text-right">Harga Jual 2</th>
+                <th className="px-4 py-2 text-right">Hrg Jual 2</th>
+                <th className="px-4 py-2">Satuan 3</th>
+                <th className="px-4 py-2 text-right">Hrg Jual 3</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.row} className={`border-b border-line ${r.errors.length > 0 ? "bg-danger/5" : ""}`}>
-                  <td className="px-4 py-2 text-ink-soft">{r.row}</td>
-                  <td className="px-4 py-2 font-medium">
-                    {r.parsed.nama || <span className="text-ink-soft">—</span>}
-                    {r.errors.length > 0 && (
-                      <span className="ml-2 text-xs text-danger" title={r.errors.join("; ")}>
-                        <AlertCircle size={12} className="inline" />
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2">{fmt(r.parsed.merk)}</td>
-                  <td className="px-4 py-2">{fmt(r.parsed.kategori)}</td>
-                  <td className="px-4 py-2 font-mono text-xs">{fmt(r.parsed.barcode)}</td>
-                  <td className="px-4 py-2">{String(r.parsed.satuan_dasar || "") || "—"}</td>
-                  <td className="px-4 py-2 text-right">{r.parsed.stok ?? 0}</td>
-                  <td className="px-4 py-2 text-right">{formatRupiah((r.parsed.harga_beli as number) ?? 0)}</td>
-                  <td className="px-4 py-2 text-right">{formatRupiah((r.parsed.harga_jual as number) ?? 0)}</td>
+                  <td className="sticky left-0 bg-surface px-4 py-2 text-ink-soft">{r.row}</td>
+                  {Object.entries(mapping).map(([colIdx, field]) => {
+                    if (!field) return null;
+                    const val = r.parsed[field];
+                    const isNum = ["stok", "stok_min", "harga_beli", "harga_jual", "konversi_2", "harga_beli_2", "harga_jual_2", "konversi_3", "harga_beli_3", "harga_jual_3"].includes(field);
+                    return (
+                      <td key={colIdx} className={`whitespace-nowrap px-4 py-2 ${isNum ? "text-right" : ""}`}>
+                        {isNum ? (val ? formatRupiah(Number(val)) : "0") : (String(val ?? "") || "—")}
+                      </td>
+                    );
+                  })}
                   <td className="px-4 py-2">{r.unit2?.satuan ?? "—"}</td>
                   <td className="px-4 py-2 text-right">{r.unit2 ? formatRupiah(r.unit2.harga_jual) : "—"}</td>
+                  <td className="px-4 py-2">{r.unit3?.satuan ?? "—"}</td>
+                  <td className="px-4 py-2 text-right">{r.unit3 ? formatRupiah(r.unit3.harga_jual) : "—"}</td>
                 </tr>
               ))}
             </tbody>
