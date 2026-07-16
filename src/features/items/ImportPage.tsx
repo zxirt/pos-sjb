@@ -266,17 +266,17 @@ export function ImportPage() {
               <p className="font-semibold">Klik untuk pilih file Excel</p>
               <p className="mt-1 text-sm text-ink-soft">.xlsx, .xls, atau .csv</p>
             </div>
-            <Button variant="primary" size="sm" type="button">
+            <Button variant="primary" size="sm" type="button" onClick={() => fileRef.current?.click()}>
               <Upload size={16} /> Pilih File
             </Button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".xlsx,.xls,.csv"
-              className="hidden"
-              onChange={(e) => e.target.files?.[0] && loadFile(e.target.files[0])}
-            />
           </label>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            className="hidden"
+            onChange={(e) => e.target.files?.[0] && loadFile(e.target.files[0])}
+          />
           <div className="flex flex-col items-center justify-center gap-2 pt-4">
             <FileSpreadsheet size={32} className="text-ink-soft" />
             <p className="text-center text-sm text-ink-soft">Unduh template<br />untuk diisi</p>

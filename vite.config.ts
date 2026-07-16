@@ -12,7 +12,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.svg", "robots.txt"],
+      includeAssets: ["favicon.svg"],
       manifest: {
         name: "SJB POS — Toko Bangunan & Toserba",
         short_name: "SJB POS",
