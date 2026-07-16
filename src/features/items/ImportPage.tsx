@@ -175,6 +175,7 @@ export function ImportPage() {
   const [importing, setImporting] = useState(false);
   const [done, setDone] = useState(0);
   const [fail, setFail] = useState(0);
+  const [clearFirst, setClearFirst] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   function loadFile(file: File) {
@@ -237,6 +238,18 @@ export function ImportPage() {
       if (!existingSupNames.has(name.toLowerCase())) {
         await createSupplier({ nama: name, kontak: "", alamat: "", catatan: "" });
       }
+    }
+
+    // Hapus semua produk lama jika dicentang
+    if (clearFirst) {
+      const oldIds = (await db.items.where("deleted").equals(0).toArray()).map((i) => i.id);
+      await db.transaction("rw", db.items, db.item_units, db.stock_ledger, async () => {
+        for (const id of oldIds) {
+          await db.item_units.where("item_id").equals(id).delete();
+          await db.stock_ledger.where("item_id").equals(id).delete();
+          await db.items.delete(id);
+        }
+      });
     }
 
     let ok = 0;
@@ -335,12 +348,22 @@ export function ImportPage() {
       {rows && (
         <Card className="mb-6 overflow-x-auto">
           <div className="p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-ink-soft">
-                Pratinjau ({rows.length} baris, {validRows.length} valid
-                {hasErrors && `, ${rows.length - validRows.length} error`})
-              </h2>
-              <Button
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-bold uppercase tracking-wider text-ink-soft">
+                  Pratinjau ({rows.length} baris, {validRows.length} valid
+                  {hasErrors && `, ${rows.length - validRows.length} error`})
+                </h2>
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2 text-xs text-warn">
+                    <input
+                      type="checkbox"
+                      checked={clearFirst}
+                      onChange={(e) => setClearFirst(e.target.checked)}
+                      className="h-4 w-4"
+                    />
+                    Hapus semua produk lama dulu
+                  </label>
+                  <Button
                 variant="primary"
                 size="sm"
                 disabled={importing || validRows.length === 0}
@@ -352,6 +375,7 @@ export function ImportPage() {
                   <><Upload size={16} /> Import {validRows.length} Produk</>
                 )}
               </Button>
+            </div>
             </div>
             {(done > 0 || fail > 0) && (
               <div className="mb-3 flex gap-4 text-sm">
