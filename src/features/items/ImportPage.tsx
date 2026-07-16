@@ -44,7 +44,7 @@ const COL_MAP: Record<string, string> = {
   merk: "merk", merek: "merk",
   kategori: "kategori", kategory: "kategori",
   barcode: "barcode",
-  deskripsi: "deskripsi", catatan: "deskripsi", supplier: "deskripsi",
+  deskripsi: "deskripsi", catatan: "deskripsi", supplier: "deskripsi", "supplier / catatan": "deskripsi",
   satuan: "satuan_dasar", "satuan dasar": "satuan_dasar",
   stok: "stok", "stok awal": "stok",
   "stok minimum": "stok_min",
@@ -245,7 +245,8 @@ export function ImportPage() {
           units,
         });
         ok++;
-      } catch {
+      } catch (e) {
+        console.error("[Import] Row", r.row, r.parsed.nama, e);
         nok++;
       }
       setDone(ok);
