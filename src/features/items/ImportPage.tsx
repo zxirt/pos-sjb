@@ -4,6 +4,9 @@ import * as XLSX from "xlsx";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { createItem, type ItemUnitFormData } from "./items";
+import { addCategory } from "./catalog";
+import { createSupplier } from "@/features/suppliers/suppliers";
+import { db } from "@/db/db";
 import { formatRupiah } from "@/lib/money";
 
 const FIELD_LABEL: Record<string, string> = {
@@ -215,6 +218,27 @@ export function ImportPage() {
     setImporting(true);
     setDone(0);
     setFail(0);
+
+    // Auto-create kategori yang belum ada
+    const catNames = [...new Set(validRows.map((r) => String(r.parsed.kategori ?? "").trim()).filter(Boolean))];
+    const existingCats = await db.categories.where("deleted").equals(0).toArray();
+    const existingCatNames = new Set(existingCats.map((c) => c.nama.toLowerCase()));
+    for (const name of catNames) {
+      if (!existingCatNames.has(name.toLowerCase())) {
+        await addCategory(name);
+      }
+    }
+
+    // Auto-create supplier yang belum ada
+    const supNames = [...new Set(validRows.map((r) => String(r.parsed.deskripsi ?? "").trim()).filter(Boolean))];
+    const existingSups = await db.suppliers.where("deleted").equals(0).toArray();
+    const existingSupNames = new Set(existingSups.map((s) => s.nama.toLowerCase()));
+    for (const name of supNames) {
+      if (!existingSupNames.has(name.toLowerCase())) {
+        await createSupplier({ nama: name, kontak: "", alamat: "", catatan: "" });
+      }
+    }
+
     let ok = 0;
     let nok = 0;
     for (const r of validRows) {

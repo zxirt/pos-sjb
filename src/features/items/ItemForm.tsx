@@ -224,12 +224,12 @@ export function ItemForm({ item, units: existingUnits, onDone }: Props) {
             />
           </Field>
           <Field>
-            <Label htmlFor="deskripsi">Deskripsi (opsional)</Label>
+            <Label htmlFor="deskripsi">Catatan / Supplier</Label>
             <Input
               id="deskripsi"
               value={deskripsi}
               onChange={(e) => setDeskripsi(e.target.value)}
-              placeholder="catatan singkat"
+              placeholder="supplier atau catatan"
             />
           </Field>
         </div>
