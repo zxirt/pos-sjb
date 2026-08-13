@@ -63,7 +63,7 @@ export function fromRemote(
   // Jika server deleted, set deleted=1 & synced
   if (deleted === 1) {
     return {
-      ...localRecord,
+      ...(localRecord || {}),
       ...data,
       deleted: 1,
       updated_at,
