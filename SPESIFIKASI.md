@@ -261,7 +261,7 @@ Multi-satuan, favorit, diskon per-baris, **biaya tambahan** (free-text+nominal),
 `/pembelian` (pemilik-only, `PurchasePage`). `SettlementModal` (Hutang-Piutang): pilih pihak → tagihan belum lunas (multi-pilih) → **alokasi FIFO** (`allocate.ts` murni+test) → batch pay (`bayarPiutangBatch`/`bayarHutangBatch`). **Tanggal pembayaran bisa dipilih** (default hari ini, max hari ini) di semua jalur bayar.
 
 ### ✅ Fase 5 — **Sync Engine**
-Otomatis & terus-menerus saat online; event-driven (tanpa timer); pull/push dua arah; konflik LWW server wins; stok via ledger merge+recompute; Realtime subscription; unit test `clean` + `merge`.
+**SELESAI** dengan keputusan: **CLIENT-WINS** LWW (timestamp lokal lebih besar menang) + **push individual delta** stock_ledger. Otomatis & terus-menerus saat online; event-driven (tanpa timer); pull/push dua arah; stok via ledger merge+recompute; Realtime subscription; unit test `clean` + `merge`. Implementasi di `src/lib/sync/`, terintegrasi di `Layout.tsx`, UI `SyncStatusBar`.
 
 ### ✅ Fase 6 — Laporan + Cek Harga
 Penjualan harian/periode (omzet, jml transaksi, terlaris), laba/rugi (harga beli vs jual), piutang/hutang + jatuh tempo, arus kas (masuk vs keluar termasuk pelunasan), ekspor CSV sisi klien. Cek Harga: lookup nama/merk/barcode → harga eceran+grosir, stok semua satuan, **riwayat pembelian** (dari ledger `restock` yang menyimpan harga_beli+supplier_id).
@@ -274,9 +274,13 @@ Profil toko lengkap, **dua toggle** stok/harga + owner_pin di UI, manajemen peng
 
 ---
 
-## 10. BLUEPRINT FASE 5 — Sync Engine (untuk dilanjutkan)
+## 10. Fase 5: Sync Engine ✅ SELESAI
 
-> Fase 5 dimulai lalu **dijeda di tahap desain**. Bagian ini adalah cetak biru lengkap agar implementasi konsisten dengan semua fase yang sudah ada. Tujuan: sinkron dua arah Dexie ↔ Supabase, **otomatis & terus-menerus saat online, tanpa timer berkala**, aman offline, konflik terselesaikan deterministik.
+**Status**: ✅ SELESAI (Agustus 2026) dengan keputusan:
+- **Strategi konflik**: CLIENT-WINS (timestamp lokal `updated_at` lebih besar menang)
+- **Stock ledger**: Push individual delta (append-only, setiap baris ledger di-push)
+
+Implementasi lengkap di `src/lib/sync/`: `index.ts` (orchestrator), `push.ts`, `pull.ts`, `merge.ts`, `clean.ts`, `realtime.ts`, `state.ts`, `types.ts`. Terintegrasi di `Layout.tsx`, UI `SyncStatusBar.tsx`. Migration server: `0003_phase5_sync.sql` sampai `0005_fix_sync_params.sql`. Skema Dexie v6-v9 (sync-ready). Unit test lulus (`clean.test.ts`, `merge.test.ts`).
 
 ### 10.1 ⚠️ DUA KEPUTUSAN TERTUNDA (tanyakan user SEBELUM menulis kode sync)
 

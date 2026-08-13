@@ -1,7 +1,7 @@
 /**
  * Sync merge logic & stock ledger recompute
- * LWW: server-side `updated_at` wins (klien tidak override)
- * Stock ledger: append-only, recompute delta sum setelah pull
+ * LWW: client-side `updated_at` wins (lokal timestamp lebih besar menang)
+ * Stock ledger: append-only, push individual delta
  */
 
 import { db } from "@/db/db";
@@ -15,7 +15,7 @@ import { fromRemote } from "./clean";
 
 /**
  * Merge single row: bandingkan server vs lokal, apply LWW jika perlu
- * Strategy: server ALWAYS wins (server updated_at adalah authority)
+ * Strategy: CLIENT-WINS (timestamp lokal lebih besar menang)
  *
  * @param table table name
  * @param pullRow dari server
@@ -56,9 +56,20 @@ export async function mergeRow(
   }
 
   // Jika server aktif (deleted=0):
-  // Compare updated_at: server ALWAYS wins (LWW dengan server authority)
+  // Compare updated_at: CLIENT-WINS (timestamp lokal lebih besar menang)
   const serverUpdatedAt = new Date(pullRow.updated_at).getTime();
   const localUpdatedAt = new Date(localRecord.updated_at ?? 0).getTime();
+
+  // STRATEGI CLIENT-WINS: Timestamp lebih besar yang menang
+  if (localUpdatedAt > serverUpdatedAt) {
+    // Lokal lebih baru: skip pull, lokal akan push ke server nanti
+    return {
+      action: "skip",
+      local: localRecord,
+      merged: localRecord,
+      reason: `lokal lebih baru (${localRecord.updated_at} > ${pullRow.updated_at}), akan push`,
+    };
+  }
 
   if (serverUpdatedAt > localUpdatedAt) {
     // Server lebih baru: update lokal
@@ -70,23 +81,12 @@ export async function mergeRow(
     };
   }
 
-  if (serverUpdatedAt === localUpdatedAt) {
-    // Sama: skip (sudah konsisten)
-    return {
-      action: "skip",
-      local: localRecord,
-      merged: localRecord,
-      reason: "updated_at sama, skip update",
-    };
-  }
-
-  // Lokal lebih baru: tetap skip, jangan override (lokal akan push nanti)
-  // Catatan: ini edge case, biasanya tidak terjadi karena server adalah authority
+  // Sama timestamp: skip (sudah konsisten)
   return {
     action: "skip",
     local: localRecord,
     merged: localRecord,
-    reason: "lokal lebih baru (pending push ke server)",
+    reason: "updated_at sama, skip update",
   };
 }
 

@@ -32,9 +32,11 @@ React 18 + Vite + TypeScript · Tailwind v3 (komponen UI custom ringan) · Dexie
 8. **Atomik**: operasi finansial multi-tabel pakai `db.transaction("rw", [...], ...)`.
 9. **Edit/hapus transaksi**: soft-delete turunan lalu bangun ulang (`features/history/history.ts`).
 
-## Yang sedang dikerjakan: Fase 5 (Sync Engine)
+## Status Proyek
 
-Fase 5 **dijeda di tahap desain**. Blueprint lengkap di [`SPESIFIKASI.md` §10](SPESIFIKASI.md). **Sebelum menulis kode sync, tanyakan user dua keputusan tertunda** (LWW server/klien; sync ledger) — lihat §10.1. Ada juga prasyarat: perbaiki bug index `dirty` di `transactions` (skema v6) & buat migration server `0003` (lihat §10.2).
+**Fase 5 (Sync Engine)**: ✅ SELESAI dengan keputusan CLIENT-WINS + push individual delta. Implementasi lengkap di `src/lib/sync/`, skema Dexie v6-v9, migration server 0003-0005. Semua test lulus (80 tests passed).
+
+Sync engine otomatis & event-driven (tanpa timer), terintegrasi di `Layout.tsx` dengan `SyncStatusBar`. Offline-first tetap jalan penuh. Detail lengkap di [`SPESIFIKASI.md` §10](SPESIFIKASI.md).
 
 ## Verifikasi
 
